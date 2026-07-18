@@ -409,7 +409,27 @@ def _lower_function(fn, source_file: str) -> FunctionIR:
     )
 
 
-def _module_imports(root) -> dict[str, str]:
+def _abs_module(module_node, source_file: str) -> str:
+    """Resolve a ``from ... import`` module to an absolute dotted name, normalizing relative
+    imports (``from .db import x`` in ``pkg/app.py`` -> ``pkg.db``) so the FQN index matches."""
+    if module_node.type != "relative_import":
+        return _text(module_node)
+    text = _text(module_node)
+    n_dots = len(text) - len(text.lstrip("."))
+    rest = text[n_dots:]
+    fqn = source_file[:-3] if source_file.endswith(".py") else source_file
+    parts = [p for p in fqn.split("/") if p]
+    if parts and parts[-1] == "__init__":
+        parts.pop()                       # __init__ IS its package
+    else:
+        parts = parts[:-1]                # the package containing this module
+    up = n_dots - 1
+    base = parts[: len(parts) - up] if 0 <= up <= len(parts) else []
+    base_fqn = ".".join(base)
+    return f"{base_fqn}.{rest}" if rest else base_fqn
+
+
+def _module_imports(root, source_file: str) -> dict[str, str]:
     """Top-level ``import`` / ``from ... import`` bindings: local name -> FQN.
 
     Lets the rule matcher resolve ``request`` -> ``flask.request``, ``os`` -> ``os`` etc.
@@ -432,7 +452,7 @@ def _module_imports(root) -> dict[str, str]:
         elif node.type == "import_from_statement":
             kids = node.named_children
             if kids:
-                module = _text(kids[0]) if kids[0].type in ("dotted_name", "relative_import") else ""
+                module = _abs_module(kids[0], source_file) if kids[0].type in ("dotted_name", "relative_import") else ""
                 for c in kids[1:]:
                     if c.type == "dotted_name":
                         local = _text(c).split(".", 1)[0]
@@ -449,12 +469,38 @@ def _module_imports(root) -> dict[str, str]:
     return imap
 
 
+def _class_spans(root) -> list[tuple[str, Span]]:
+    out: list[tuple[str, Span]] = []
+
+    def visit(n) -> None:
+        if n.type == "class_definition":
+            name = n.child_by_field_name("name")
+            out.append((_text(name) if name is not None else "<class>", Span.of(n)))
+        for c in n.children:
+            visit(c)
+
+    visit(root)
+    return out
+
+
+def _enclosing_class(fn_span: Span, class_spans: list[tuple[str, Span]]) -> Optional[str]:
+    best: Optional[tuple[str, int]] = None
+    for name, cs in class_spans:
+        if cs.start_line < fn_span.start_line and fn_span.end_line <= cs.end_line:
+            if best is None or cs.start_line > best[1]:
+                best = (name, cs.start_line)
+    return best[0] if best is not None else None
+
+
 def lower_source(src: bytes, source_file: str) -> ModuleIR:
     """Lower one Python source buffer into a ``ModuleIR`` (functions + import map)."""
     tree = _parser().parse(src)
     root = tree.root_node
+    class_spans = _class_spans(root)
     functions = [_lower_function(fn, source_file) for fn in _iter_function_defs(root)]
-    return ModuleIR(source_file=source_file, functions=functions, imports=_module_imports(root))
+    for fn in functions:
+        fn.enclosing_class = _enclosing_class(fn.span, class_spans)
+    return ModuleIR(source_file=source_file, functions=functions, imports=_module_imports(root, source_file))
 
 
 def lower_file(path: Path | str, source_file: Optional[str] = None) -> ModuleIR:

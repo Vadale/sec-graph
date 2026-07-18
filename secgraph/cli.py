@@ -43,6 +43,27 @@ def scan(path: str) -> None:
     typer.echo(f"{len(findings)} finding(s).")
 
 
+@app.command(name="callgraph-stats")
+def callgraph_stats(path: str) -> None:
+    """Measure call-site binding rate over PATH (the Phase-3 KILL-GATE metric)."""
+    from secgraph.callgraph import binding_rate, build_index, resolve_all_sites
+    from secgraph.ir import build_project_ir
+    from secgraph.rules import default_rules_dir, load_rules
+
+    modules = build_project_ir(path)
+    index = build_index(modules)
+    _sites, rows = resolve_all_sites(modules, index, {}, load_rules(default_rules_dir()))
+    stats = binding_rate(rows)
+    for cat in sorted(stats["counts"]):
+        typer.echo(f"  {cat:14} {stats['counts'][cat]}")
+    typer.echo(f"call sites: {stats['total']}")
+    typer.echo(
+        f"binding rate (bound/(bound+unresolved)): {stats['gate_rate']:.1%}  "
+        f"[bound={stats['bound']}, unresolved={stats['unresolved']}]"
+    )
+    typer.echo(f"accounted-for: {stats['accounted_rate']:.1%}")
+
+
 @app.command()
 def view() -> None:
     """Open the interactive layered map (secgraph.html)."""

@@ -237,7 +237,8 @@ class FunctionIR:
     body: list[Stmt]
     span: Span
     source_file: str
-    graphify_node: Optional[str] = None   # filled by secgraph.ir.join
+    enclosing_class: Optional[str] = None  # set for methods (excluded from the module FQN index)
+    graphify_node: Optional[str] = None    # filled by secgraph.ir.join
     cfg: Optional[CFG] = None
     defuse: Optional[DefUse] = None
 
@@ -312,6 +313,21 @@ def iter_calls(expr: Optional[Expr]) -> list["Call"]:
     for c in _child_exprs(expr):
         out += iter_calls(c)
     return out
+
+
+def stmt_exprs(s: "Stmt") -> list[Optional[Expr]]:
+    """The top-level expression(s) of a statement (Branch/control sub-bodies excluded)."""
+    if isinstance(s, (Assign, ExprStmt)):
+        return [s.value]
+    if isinstance(s, Return):
+        return [s.value] if s.value is not None else []
+    if isinstance(s, (If, While)):
+        return [s.test]
+    if isinstance(s, For):
+        return [s.iter]
+    if isinstance(s, Unsupported):
+        return list(s.uses)
+    return []
 
 
 def access_path(expr: Optional[Expr]) -> Optional[AccessPath]:

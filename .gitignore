@@ -27,3 +27,7 @@ secgraph-cache/
 .DS_Store
 .idea/
 .vscode/
+.Rhistory
+
+# Derived renders of the docs (e.g. pandoc ROADMAP.md -> ROADMAP.html)
+/*.html
