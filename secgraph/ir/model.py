@@ -247,7 +247,9 @@ class FunctionIR:
 class ModuleIR:
     source_file: str
     functions: list[FunctionIR] = field(default_factory=list)
-    imports: dict[str, str] = field(default_factory=dict)  # local name -> fully-qualified name
+    imports: dict[str, str] = field(default_factory=dict)   # local name -> fully-qualified name
+    globals: dict[str, Optional[str]] = field(default_factory=dict)  # module-level `x = Call()` -> callee FQN
+    classes: dict[str, list[str]] = field(default_factory=dict)      # class name -> resolved base FQNs
 
 
 # ---- helpers ---------------------------------------------------------------------

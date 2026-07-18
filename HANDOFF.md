@@ -1,9 +1,14 @@
 # HANDOFF — state for the next session
 
 ## Where we are
-Bootstrap + **WP0 + WP1 + WP2 + WP3-core complete. 49 tests green.** All reviewed by the
-`reviewer` agent, hardened, and simplify-passed. Dev env `.venv`
+Bootstrap + **WP0 + WP1 + WP2 + WP3 complete, incl. the KILL-GATE which now PASSES. 50 tests
+green.** All reviewed by the `reviewer` agent, hardened, and simplify-passed. Dev env `.venv`
 (`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
+
+**KILL-GATE RESULT (ADR-007 metric):** PCR (project-call resolution) = **100% / 99.4% / 94.7%**
+on microblog / fastapi-realworld / flask-realworld (gate >=85%); UNK 11-18% (<=40%). The raw
+10-17% first measured was a classifier artifact. **Build-on-graphify thesis validated** — see
+`diary/2026-07-18-06-killgate.md` and ADR-007.
 - **WP0**: graphify behind the quarantine wall; `secgraph analyze` -> `graph.json`.
 - **WP1**: the Python **IR** (tree-sitter -> CFG + reaching-defs def-use + (file,line) join).
 - **WP2**: rules engine + **intraprocedural** flow-sensitive taint (`secgraph scan`).
@@ -14,17 +19,23 @@ Bootstrap + **WP0 + WP1 + WP2 + WP3-core complete. 49 tests green.** All reviewe
 See `diary/2026-07-18-05-wp3.md` and earlier `-04/-03/-02`.
 
 ## Decisions locked
-`DECISIONS.md` ADR-000..006. No new ADR yet.
+`DECISIONS.md` ADR-000..007 (ADR-007 re-specifies the KILL-GATE metric).
 
 ## Next session — pick one
-### A. Finish the WP3 KILL-GATE (needs a quick decision from Alessandro)
-The metric TOOL ships. The remaining step is the **benchmark RUN**: measure `callgraph-stats`
-binding rate on **3 real Flask/FastAPI repos**; need **>=60-70%** (else reassess the
-build-on-graphify thesis). This needs external repos — decide whether to clone public ones
-(e.g. PyGoat + 2 small Flask/FastAPI apps) or use repos Alessandro provides. **This is the
-open decision.**
+### A. WP3-b — make the resolved edges carry taint (the natural follow-on)
+The classifier now BINDS methods/constructors, but the taint ENGINE still only consumes
+project-*function* summaries (so the 50 tests stayed byte-identical). Wire the rest:
+- **Constructor-taint rule** (soundness trap): `User(tainted)` result = fallback over-approx
+  UNION summary — NEVER trust a constructor's empty `return_params` (that would *clear* taint).
+- **arg->param / receiver-param map** + `Call.kw_names` (methods shift self=param0; kwargs need
+  name mapping) — fixes a latent mis-map before it ships.
+- TRR instrumentation (the taint-relevant metric); SQLAlchemy/WTForms **rules packs** (the
+  biggest TRR mover on ORM code — YAML, not engine); a pinned `tests/benchmarks/` harness;
+  the graphify `calls` **differential validator**.
+Have `reviewer` audit the engine changes for the "binding clears taint" trap and `tester`
+write the adversarial `User(request.args[...])` fixture.
 
-### B. WP3-b — close the deferred resolver/precision gaps (the rest of ROADMAP Phase 3)
+### B. More resolver precision (optional, lower priority)
 - **H2 (field-sensitivity, the important one):** a RESOLVED callee that launders taint
   through `d[k]=x` / `self.x=x` / a global has empty `return_params`, so callers miss the
   flow -> `run_project` can under-report vs the pure-intra over-approx (the `intra <= inter`

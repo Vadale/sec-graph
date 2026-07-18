@@ -101,12 +101,40 @@ def test_method_name_collision_binds_to_function_not_method() -> None:
     assert any(f.sink_id == "py-sql-exec" for f in fs)
 
 
+def test_adr007_library_object_external_and_constructor_bound() -> None:
+    from secgraph.callgraph.resolve import build_index, classify_site
+    from secgraph.ir import analyze_module, lower_source
+    from secgraph.ir.model import Attr, Name, iter_calls, stmt_exprs
+
+    mods = [
+        analyze_module(lower_source(
+            b"from flask_sqlalchemy import SQLAlchemy\ndb = SQLAlchemy()\n", "app/__init__.py")),
+        analyze_module(lower_source(
+            b"from app import db\n\n"
+            b"class User(db.Model):\n    def check(self, x):\n        return x\n\n"
+            b"def q():\n    db.session.commit()\n    u = User()\n    u.rows()\n", "app/models.py")),
+    ]
+    index = build_index(mods)
+    got: dict[str, str] = {}
+    for m in mods:
+        for fn in m.functions:
+            for stmt in (fn.cfg.stmt_of.values() if fn.cfg else []):
+                for e in stmt_exprs(stmt):
+                    for call in iter_calls(e):
+                        cat, _ = classify_site(call, fn, m, index, {}, RULES)
+                        f = call.func
+                        got[f.ident if isinstance(f, Name) else f.attr if isinstance(f, Attr) else "?"] = cat
+    assert got.get("commit") == "external"   # db.session.commit -> library-object method (the 83% fix)
+    assert got.get("User") == "bound"        # class constructor
+    assert got.get("rows") == "external"     # method inherited from db.Model (library-backed base)
+
+
 def test_binding_rate_on_tiny() -> None:
     modules = build_project_ir(TINY)
     index = build_index(modules)
     _sites, rows = resolve_all_sites(modules, index, {}, RULES)
     stats = binding_rate(rows)
-    # run_query(uid)=bound-import; conn.execute=rule; sqlite3.connect=external; .fetchall=unresolved
+    # run_query(uid)=bound-import; conn.execute=rule; sqlite3.connect=external; .fetchall=unknown
     assert stats["counts"].get("bound-import", 0) >= 1
-    assert stats["bound"] == 1 and stats["unresolved"] == 1
-    assert stats["gate_rate"] == 0.5
+    assert stats["unresolved_project"] == 0
+    assert stats["PCR"] == 1.0

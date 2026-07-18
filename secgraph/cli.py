@@ -55,13 +55,16 @@ def callgraph_stats(path: str) -> None:
     _sites, rows = resolve_all_sites(modules, index, {}, load_rules(default_rules_dir()))
     stats = binding_rate(rows)
     for cat in sorted(stats["counts"]):
-        typer.echo(f"  {cat:14} {stats['counts'][cat]}")
-    typer.echo(f"call sites: {stats['total']}")
+        typer.echo(f"  {cat:18} {stats['counts'][cat]}")
+    typer.echo(f"call sites: {stats['total']}  (method-call sites: {stats['method_sites']})")
     typer.echo(
-        f"binding rate (bound/(bound+unresolved)): {stats['gate_rate']:.1%}  "
-        f"[bound={stats['bound']}, unresolved={stats['unresolved']}]"
+        f"PCR (project-call resolution): {stats['PCR']:.1%}  "
+        f"[bound={stats['bound']}, unresolved-project={stats['unresolved_project']}]"
     )
-    typer.echo(f"accounted-for: {stats['accounted_rate']:.1%}")
+    typer.echo(
+        f"UNK (unknown-receiver / method sites): {stats['UNK']:.1%}  "
+        f"[unknown-receiver={stats['unknown_receiver']}]"
+    )
 
 
 @app.command()

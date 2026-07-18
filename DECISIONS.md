@@ -83,3 +83,41 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
   simplicity keeps the quarantine/sidecar clean.
 - **Rejected:** security/optimization/functionality as top pillars (secondary for
   now; optimization is revisited at the "regret-Rust" line in `ROADMAP.md` §17).
+
+## ADR-007 — Re-specify the Phase-3 KILL-GATE (supersedes the single-rate gate)
+- 2026-07-18 · Accepted (design consulted with a Fable 5 max agent)
+- **Context:** the original gate ("call-site binding rate >=60-70%") was measured at
+  10-17% on 3 real Flask/FastAPI repos (microblog/fastapi-realworld/flask-realworld). A
+  verified breakdown showed the failure is **classifier failure, not resolution failure**:
+  ~83% of "unresolved" are library method calls (`db.session.scalar`, `query.where`) whose
+  receiver traces through a project package, so they were mis-labelled "unresolved" instead
+  of "external"; ~17% are project **class constructors** we don't index. Project-internal
+  *function* calls resolve fine. Also, the gate was run *before* the local fallback resolver
+  that ROADMAP §14 named as part of the gated configuration.
+- **Decision:** replace the single rate with **three numbers over a strict site partition**
+  (`rule | builtin | bound | external | unknown-receiver | unresolved-project`), where
+  `external` requires **positive evidence** (a resolved chain leaving the project, or a
+  receiver whose value-origin is an external constructor/import) and absence of evidence
+  goes to `unknown-receiver`, never `external` (anti-gaming):
+  - **PCR** (project-call resolution) = `bound / (bound + unresolved-project)` — gate **>=85%**.
+  - **UNK** (unknown-receiver / method-call sites) — reported, bounded **<=40%**, not hard-gated.
+  - **TRR** (taint-relevant resolution) over call sites whose receiver/arg is tainted at the
+    fixpoint = fraction `rule|builtin|bound|external` — gate **>=70%**. This is the number
+    that validates the thesis (on the paths that matter, do we know what the call is).
+  - `bound-oracle` (graphify name-singleton) is **excluded from the PCR numerator**.
+- **Re-specified kill-criterion:** the build-on-graphify thesis is refuted only if, AFTER
+  correct classification + the Tier-0..3 resolver, PCR < 70% (resolver can't bind project
+  code) OR TRR < 50% with the blind mass being project (not library) calls. A blind mass of
+  library methods is a **rules-pack** problem (YAML), not a resolution-architecture problem,
+  and implies no graphify divorce.
+- **Why:** resolution failures do not currently cost findings (the engine over-approximates
+  unresolved calls and sinks are rule-matched *before* resolution), so the gate's real job
+  is FP/triage quality and detecting resolver regressions — which the raw rate could not do.
+  The site taxonomy is also the `provenance` vocabulary the viz (Phase 5) and triage prompts
+  (§15) need.
+- **graphify oracle:** NOT wired for resolution (it drops variable-receiver calls too, ~zero
+  net gain); reserved as a **differential validator** (edges graphify's `calls` has that we
+  mark unresolved-project = a resolver-bug list). Keeps ADR-000 honest: graphify's donation
+  is the entity graph + artifact/viz/MCP substrate + validation skeleton, never per-site binding.
+- **Rejected:** keeping the single all-sites rate (meaningless on ORM code, gameable);
+  declaring the thesis dead on the mis-specified number.

@@ -469,6 +469,62 @@ def _module_imports(root, source_file: str) -> dict[str, str]:
     return imap
 
 
+def _resolve_callee_fqn(node, imap: dict[str, str]) -> Optional[str]:
+    """Resolve a call's callee (identifier / attribute chain) to an FQN via the import map."""
+    if node is None:
+        return None
+    if node.type == "identifier":
+        n = _text(node)
+        return imap.get(n, n)
+    if node.type == "attribute":
+        obj = node.child_by_field_name("object")
+        attr = node.child_by_field_name("attribute")
+        base = _resolve_callee_fqn(obj, imap)
+        return f"{base}.{_text(attr)}" if base is not None and attr is not None else None
+    return None
+
+
+def _module_globals(root, imap: dict[str, str]) -> dict[str, Optional[str]]:
+    """Module-level ``name = SomeCall(...)`` -> the callee's FQN (or None). Lets the resolver
+    tell a project singleton (`store = Store()`) from a library object (`db = SQLAlchemy()`)."""
+    globs: dict[str, Optional[str]] = {}
+    for node in root.children:
+        if node.type != "expression_statement":
+            continue
+        inner = [c for c in node.named_children if c.type != "comment"]
+        if inner and inner[0].type == "assignment":
+            a = inner[0]
+            left = a.child_by_field_name("left")
+            right = a.child_by_field_name("right")
+            if left is not None and left.type == "identifier" and right is not None and right.type == "call":
+                globs[_text(left)] = _resolve_callee_fqn(right.child_by_field_name("function"), imap)
+    return globs
+
+
+def _class_infos(root, imap: dict[str, str]) -> dict[str, list[str]]:
+    """Class name -> resolved base-class FQNs (for constructor binding + method MRO)."""
+    infos: dict[str, list[str]] = {}
+
+    def visit(n) -> None:
+        if n.type == "class_definition":
+            name = n.child_by_field_name("name")
+            supers = n.child_by_field_name("superclasses")
+            bases: list[str] = []
+            if supers is not None:
+                for c in supers.named_children:
+                    if c.type in ("identifier", "attribute"):
+                        fqn = _resolve_callee_fqn(c, imap)
+                        if fqn:
+                            bases.append(fqn)
+            if name is not None:
+                infos.setdefault(_text(name), bases)
+        for c in n.children:
+            visit(c)
+
+    visit(root)
+    return infos
+
+
 def _class_spans(root) -> list[tuple[str, Span]]:
     out: list[tuple[str, Span]] = []
 
@@ -493,14 +549,18 @@ def _enclosing_class(fn_span: Span, class_spans: list[tuple[str, Span]]) -> Opti
 
 
 def lower_source(src: bytes, source_file: str) -> ModuleIR:
-    """Lower one Python source buffer into a ``ModuleIR`` (functions + import map)."""
+    """Lower one Python source buffer into a ``ModuleIR`` (functions + import/global/class maps)."""
     tree = _parser().parse(src)
     root = tree.root_node
+    imap = _module_imports(root, source_file)
     class_spans = _class_spans(root)
     functions = [_lower_function(fn, source_file) for fn in _iter_function_defs(root)]
     for fn in functions:
         fn.enclosing_class = _enclosing_class(fn.span, class_spans)
-    return ModuleIR(source_file=source_file, functions=functions, imports=_module_imports(root, source_file))
+    return ModuleIR(
+        source_file=source_file, functions=functions, imports=imap,
+        globals=_module_globals(root, imap), classes=_class_infos(root, imap),
+    )
 
 
 def lower_file(path: Path | str, source_file: Optional[str] = None) -> ModuleIR:

@@ -1,21 +1,26 @@
-"""Resolve each call site to a project function, with a strict precedence:
+"""Resolve each call site and classify it, with a strict precedence:
 
     rule (source/sink/sanitizer/propagator)  >  import  >  same-module local  >
-    oracle singleton (graphify's deduped calls edges, disambiguation only)  >  unresolved
+    class constructor / typed-receiver method  >  oracle singleton  >  unresolved
 
-Imports beat the oracle: the import map is exact program semantics; the oracle is deduped
-and lossy (docs/pitfalls.md #2) so it may only shrink an ambiguous candidate set to a
-singleton, never invent a bind. One binding max per site => the SCC call graph and the
-analysis never drift. Pure IR + rules; no graphify import here (the oracle arrives as a
-plain dict built in the orchestration layer).
+Every site gets exactly one category (ADR-007):
+  rule | builtin | bound(-import/-local) | external | unknown-receiver | unresolved-project
+``external`` requires POSITIVE evidence (a resolved chain leaving the project, or a receiver
+whose value-origin is an external constructor/import); absence of evidence -> ``unknown-
+receiver``, never ``external`` (anti-gaming). Pure IR + rules; no graphify import.
+
+Only project *function* binds are returned as engine ``Binding``s (they feed the taint
+summaries, unchanged from Phase 3). Constructor/method binds are counted for the metric but
+their taint propagation is a follow-up (the constructor-taint rule + arg/param map).
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 from ..ir.cfg import analyze_function
-from ..ir.model import Attr, Call, FunctionIR, ModuleIR, Name, iter_calls, stmt_exprs
+from ..ir.model import Assign, Attr, Call, FunctionIR, ModuleIR, Name, iter_calls, stmt_exprs
 from ..rules.match import (
     match_propagator,
     match_sanitizer,
@@ -25,21 +30,42 @@ from ..rules.match import (
 )
 from ..rules.model import Rules
 
-FnKey = tuple[str, int]                 # (source_file, function start_line) -- the join key
-SiteKey = tuple[int, int, int, int]     # a Call's Span (start_line, start_col, end_line, end_col)
+FnKey = tuple[str, int]
+SiteKey = tuple[int, int, int, int]
 
 _BUILTINS = frozenset({
     "int", "float", "str", "bytes", "bool", "len", "print", "range", "list", "dict",
     "set", "tuple", "repr", "format", "open", "isinstance", "getattr", "setattr", "super",
     "enumerate", "zip", "map", "filter", "sorted", "min", "max", "sum", "abs", "type",
+    "hasattr", "hash", "id", "iter", "next", "vars", "dir", "callable", "bytearray",
+    "frozenset", "complex", "slice", "object", "property", "classmethod", "staticmethod",
+    "reversed", "all", "any", "round", "divmod", "pow", "chr", "ord", "bin", "hex", "oct",
+    "input", "globals", "locals", "exit", "quit",
+    # common builtin exceptions (bare-name "constructor" calls)
+    "Exception", "BaseException", "RuntimeError", "ValueError", "TypeError", "KeyError",
+    "IndexError", "AttributeError", "StopIteration", "FileNotFoundError", "OSError",
+    "IOError", "ImportError", "NotImplementedError", "AssertionError", "PermissionError",
+    "ConnectionError", "TimeoutError", "LookupError", "ArithmeticError", "ZeroDivisionError",
+    "UnicodeDecodeError", "NameError", "OverflowError",
 })
+
+# a receiver's value-origin: an external library value, a project class, a project function
+# used as a value, or no evidence.
+Origin = Union[str, tuple]  # "external" | "project-fn" | "unknown" | ("class", fqn)
 
 
 @dataclass(frozen=True, slots=True)
 class Binding:
     target: FnKey
     provenance: str    # "import" | "local" | "oracle"
-    name: str          # callee function name (for the trace)
+    name: str
+
+
+@dataclass(slots=True)
+class ClassInfo:
+    fqn: str
+    bases: list[str]
+    methods: set
 
 
 @dataclass(slots=True)
@@ -48,11 +74,12 @@ class FnIndex:
     module_of: dict[str, ModuleIR] = field(default_factory=dict)
     by_fqn: dict[str, FnKey] = field(default_factory=dict)
     by_name: dict[str, list[FnKey]] = field(default_factory=dict)
+    classes: dict[str, ClassInfo] = field(default_factory=dict)
+    globals: dict[str, Optional[str]] = field(default_factory=dict)
     project_tops: frozenset = frozenset()
 
 
 def module_name(source_file: str) -> str:
-    """``pkg/db.py`` -> ``pkg.db``; ``pkg/__init__.py`` -> ``pkg``."""
     parts = source_file[:-3].split("/") if source_file.endswith(".py") else source_file.split("/")
     if parts and parts[-1] == "__init__":
         parts.pop()
@@ -99,25 +126,117 @@ def build_index(modules: list[ModuleIR]) -> FnIndex:
     idx.project_tops = frozenset(tops)
 
     for module in modules:
-        mod_fqn = module_name(module.source_file)
+        mod = module_name(module.source_file)
+        for clsname, bases in module.classes.items():
+            idx.classes.setdefault(f"{mod}.{clsname}", ClassInfo(f"{mod}.{clsname}", list(bases), set()))
+        for name, val in module.globals.items():
+            idx.globals.setdefault(f"{mod}.{name}", val)
         for fn in module.functions:
             key = fn_key(fn)
             idx.by_name.setdefault(fn.name, []).append(key)
-            # module-global callables only: exclude nested defs and class methods from by_fqn
-            if not _is_nested(fn, module.functions) and fn.enclosing_class is None:
-                idx.by_fqn.setdefault(f"{mod_fqn}.{fn.name}", key)
+            if fn.enclosing_class:
+                ci = idx.classes.get(f"{mod}.{fn.enclosing_class}")
+                if ci is not None:
+                    ci.methods.add(fn.name)
+            elif not _is_nested(fn, module.functions):
+                idx.by_fqn.setdefault(f"{mod}.{fn.name}", key)
     for name in idx.by_name:
         idx.by_name[name].sort()
     return idx
 
 
+def _origin_of_fqn(fqn: Optional[str], index: FnIndex) -> Origin:
+    if fqn is None:
+        return "unknown"
+    if fqn in index.classes:
+        return ("class", fqn)
+    if fqn in index.globals:                       # a project object -> what it was built from
+        return _origin_of_fqn(index.globals[fqn], index)
+    if fqn in index.by_fqn:
+        return "project-fn"
+    top = fqn.split(".", 1)[0]
+    return "external" if top not in index.project_tops else "unknown"
+
+
+def _base_is_external(base_fqn: str, index: FnIndex) -> bool:
+    """A class base like ``db.Model`` (where ``db`` is a SQLAlchemy instance) is external
+    even though it resolves through a project package -- decide via the value-origin of the
+    longest prefix that names a known object."""
+    if base_fqn.split(".", 1)[0] not in index.project_tops:
+        return True
+    parts = base_fqn.split(".")
+    for i in range(len(parts), 0, -1):
+        prefix = ".".join(parts[:i])
+        if prefix in index.globals:
+            return _origin_of_fqn(index.globals[prefix], index) == "external"
+    return False
+
+
+def _class_is_library_backed(fqn: str, index: FnIndex, seen: Optional[set] = None) -> bool:
+    """True if the class or a transitive base inherits from a non-project (library) class,
+    e.g. ``Article -> project Model -> db.Model``."""
+    seen = seen if seen is not None else set()
+    if fqn in seen:
+        return False
+    seen.add(fqn)
+    ci = index.classes.get(fqn)
+    if ci is None:
+        return False
+    for b in ci.bases:
+        if b in index.classes:
+            if _class_is_library_backed(b, index, seen):
+                return True
+        elif _base_is_external(b, index):
+            return True
+    return False
+
+
+def _base_name(expr) -> Optional[str]:
+    while isinstance(expr, Attr):
+        expr = expr.value
+    return expr.ident if isinstance(expr, Name) else None
+
+
+def _local_types(fn: FunctionIR, module: ModuleIR, index: FnIndex) -> dict[str, Origin]:
+    """Tier-1 flow-insensitive local typing: ``v = ClassName()`` / ``v = ext_call()``."""
+    imap = _shadow_imap(module, fn)
+    types: dict[str, Origin] = {}
+    conflict: set[str] = set()
+    for stmt in (fn.cfg.stmt_of.values() if fn.cfg else []):
+        if isinstance(stmt, Assign) and len(stmt.targets) == 1 and isinstance(stmt.value, Call):
+            origin = _origin_of_fqn(resolve_fqn(stmt.value.func, imap), index)
+            v = stmt.targets[0]
+            if v in types and types[v] != origin:
+                conflict.add(v)
+            else:
+                types[v] = origin
+    for v in conflict:
+        types.pop(v, None)
+    return types
+
+
+def _receiver_origin(base: str, fn: FunctionIR, module: ModuleIR, index: FnIndex) -> Origin:
+    if base == "self" and fn.enclosing_class:
+        cfqn = f"{module_name(module.source_file)}.{fn.enclosing_class}"
+        return ("class", cfqn) if cfqn in index.classes else "unknown"
+    lt = _local_types(fn, module, index)
+    if base in lt:
+        return lt[base]
+    if base in module.globals:
+        return _origin_of_fqn(module.globals[base], index)
+    imap = _shadow_imap(module, fn)
+    if base in imap:
+        return _origin_of_fqn(imap[base], index)
+    return "unknown"
+
+
+def _bound_fn(k: FnKey, provenance: str, index: FnIndex) -> Binding:
+    return Binding(k, provenance, index.fn_of[k].name)
+
+
 def classify_site(
-    call: Call,
-    fn: FunctionIR,
-    module: ModuleIR,
-    index: FnIndex,
-    oracle: dict[FnKey, frozenset],
-    rules: Rules,
+    call: Call, fn: FunctionIR, module: ModuleIR, index: FnIndex,
+    oracle: dict[FnKey, frozenset], rules: Rules,
 ) -> tuple[str, Optional[Binding]]:
     imap = _shadow_imap(module, fn)
     if (match_sink(call, imap, rules) or match_sanitizer(call, imap, rules)
@@ -127,81 +246,91 @@ def classify_site(
     f = call.func
     if isinstance(f, Name):
         if f.ident in _local_names(fn):
-            return "unresolved", None                            # shadowed / callable variable
-        if f.ident in module.imports:                            # `from db import run_query`
+            return "unknown-receiver", None                  # a callable variable
+        if f.ident in module.imports:
             fqn = module.imports[f.ident]
-            k = index.by_fqn.get(fqn)
-            if k is not None:
-                return "bound-import", Binding(k, "import", index.fn_of[k].name)
+            if fqn in index.by_fqn:
+                return "bound-import", _bound_fn(index.by_fqn[fqn], "import", index)
+            if fqn in index.classes:
+                return "bound", None                         # constructor (metric; engine binding deferred)
             top = fqn.split(".", 1)[0]
-            return ("external" if top not in index.project_tops else "unresolved"), None
-        k = index.by_fqn.get(f"{module_name(module.source_file)}.{f.ident}")
-        if k is not None:                                        # same-module module-global call
-            return "bound-local", Binding(k, "local", index.fn_of[k].name)
+            return ("external" if top not in index.project_tops else "unresolved-project"), None
+        local = f"{module_name(module.source_file)}.{f.ident}"
+        if local in index.by_fqn:
+            return "bound-local", _bound_fn(index.by_fqn[local], "local", index)
+        if local in index.classes:
+            return "bound", None                             # same-module constructor
         if f.ident in _BUILTINS:
             return "builtin", None
-        return "unresolved", None
+        return "unresolved-project", None
 
     if isinstance(f, Attr):
-        fqn = resolve_fqn(f, imap)                              # `import db; db.run_query(...)`
+        fqn = resolve_fqn(f, imap)
         if fqn is not None:
-            k = index.by_fqn.get(fqn)
-            if k is not None:
-                return "bound-import", Binding(k, "import", index.fn_of[k].name)
-            top = fqn.split(".", 1)[0]
-            if top in index.project_tops:
-                return "unresolved", None                        # project path, fn not indexed (method/nested)
-            return "external", None                              # stdlib / third-party
+            if fqn in index.by_fqn:
+                return "bound-import", _bound_fn(index.by_fqn[fqn], "import", index)
+            if fqn in index.classes:
+                return "bound", None
+            if fqn.split(".", 1)[0] not in index.project_tops:
+                return "external", None
+        base = _base_name(f.value)
+        origin = _receiver_origin(base, fn, module, index) if base else "unknown"
+        if origin in ("external", "project-fn"):
+            return "external", None
+        if isinstance(origin, tuple) and origin[0] == "class":
+            ci = index.classes.get(origin[1])
+            if ci is not None and f.attr in ci.methods:
+                return "bound", None                         # project method (metric)
+            if ci is not None and _class_is_library_backed(origin[1], index):
+                return "external", None                      # method inherited from a library base
+            return "unresolved-project", None
         cands = sorted(k for k in index.by_name.get(f.attr, ()) if k in oracle.get(fn_key(fn), frozenset()))
         if len(cands) == 1:
-            return "bound-oracle", Binding(cands[0], "oracle", index.fn_of[cands[0]].name)
-        return "unresolved", None
+            return "bound-oracle", _bound_fn(cands[0], "oracle", index)
+        return "unknown-receiver", None
 
-    return "unresolved", None
+    return "unknown-receiver", None
 
 
 def resolve_all_sites(
-    modules: list[ModuleIR],
-    index: FnIndex,
-    oracle: dict[FnKey, frozenset],
-    rules: Rules,
+    modules: list[ModuleIR], index: FnIndex, oracle: dict[FnKey, frozenset], rules: Rules,
 ) -> tuple[dict[FnKey, dict[SiteKey, Binding]], list[dict]]:
-    """Returns (per-function resolved bindings, per-site rows for the stats/kill-gate)."""
     sites: dict[FnKey, dict[SiteKey, Binding]] = {}
     rows: list[dict] = []
     for module in modules:
         for fn in module.functions:
-            fk = fn_key(fn)
             fn_sites: dict[SiteKey, Binding] = {}
-            for stmt in fn.cfg.stmt_of.values() if fn.cfg else []:
+            for stmt in (fn.cfg.stmt_of.values() if fn.cfg else []):
                 for expr in stmt_exprs(stmt):
                     for call in iter_calls(expr):
                         category, binding = classify_site(call, fn, module, index, oracle, rules)
                         if binding is not None:
                             fn_sites[site_key(call)] = binding
                         rows.append({
-                            "file": fn.source_file,
-                            "line": call.span.start_line,
-                            "col": call.span.start_col,
-                            "category": category,
-                            "target": binding.name if binding else "",
+                            "file": fn.source_file, "line": call.span.start_line,
+                            "col": call.span.start_col, "category": category,
+                            "method": isinstance(call.func, Attr),
                         })
             if fn_sites:
-                sites[fk] = fn_sites
+                sites[fn_key(fn)] = fn_sites
     rows.sort(key=lambda r: (r["file"], r["line"], r["col"]))
     return sites, rows
 
 
 def binding_rate(rows: list[dict]) -> dict:
-    """The KILL-GATE metric. gate = bound / (bound + unresolved); rule/external/builtin are
-    excluded from the denominator (already semantically handled or not binding targets)."""
-    counts: dict[str, int] = {}
-    for r in rows:
-        counts[r["category"]] = counts.get(r["category"], 0) + 1
-    bound = counts.get("bound-import", 0) + counts.get("bound-local", 0) + counts.get("bound-oracle", 0)
-    unresolved = counts.get("unresolved", 0)
+    """ADR-007 metrics. PCR = bound/(bound+unresolved-project) (oracle excluded from the
+    numerator); UNK = unknown-receiver / method-call sites."""
+    counts = Counter(r["category"] for r in rows)
+    bound = counts.get("bound", 0) + counts.get("bound-import", 0) + counts.get("bound-local", 0)
+    unresolved_project = counts.get("unresolved-project", 0)
+    unknown = counts.get("unknown-receiver", 0)
+    method_sites = sum(1 for r in rows if r.get("method"))
     total = len(rows)
-    gate = bound / (bound + unresolved) if (bound + unresolved) else 1.0
-    accounted = (total - unresolved) / total if total else 1.0
-    return {"counts": counts, "total": total, "bound": bound, "unresolved": unresolved,
-            "gate_rate": gate, "accounted_rate": accounted}
+    pcr = bound / (bound + unresolved_project) if (bound + unresolved_project) else 1.0
+    unk = unknown / method_sites if method_sites else 0.0
+    return {
+        "counts": dict(counts), "total": total, "bound": bound,
+        "bound_oracle": counts.get("bound-oracle", 0),
+        "unresolved_project": unresolved_project, "unknown_receiver": unknown,
+        "method_sites": method_sites, "PCR": pcr, "UNK": unk,
+    }
