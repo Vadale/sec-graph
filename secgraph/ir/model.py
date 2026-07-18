@@ -163,12 +163,24 @@ class For:
 
 
 @dataclass(slots=True)
+class Branch:
+    """A multi-way branch: control takes exactly one arm, all merging after. Models
+    ``try``/``except`` (arm 0 = try-body + else; then one arm per handler) and ``match``
+    (one arm per case). Modeling clauses as *alternatives that merge* means a variable
+    reassigned in only one clause is unioned at the join, never sequentially killed --
+    sound for may-taint (unlike a flat statement list)."""
+
+    sid: int
+    arms: list[list["Stmt"]]
+    span: Span
+
+
+@dataclass(slots=True)
 class Unsupported:
-    """A statement kind we do not lower into a precise IR node. Holds a best-effort list
-    of used expressions (reads survive). ``break``/``continue`` still get the right loop
-    edges in the CFG; ``with``/``try``/``match`` bodies are deferred to Phase 2, so their
-    in-block defs and returns are NOT captured -- a known false-negative source (see
-    ``lower.py`` and HANDOFF)."""
+    """A statement kind with no precise IR node: nested def/class scopes,
+    break/continue/pass/import/global, and raise/assert/delete/etc. Holds a best-effort
+    list of used expressions (reads survive). ``break``/``continue`` still get the right
+    loop edges in the CFG. (``with``/``try``/``match`` ARE lowered -- see ``lower.py``.)"""
 
     sid: int
     kind: str
@@ -176,7 +188,7 @@ class Unsupported:
     span: Span
 
 
-Stmt = Union[Assign, ExprStmt, Return, If, While, For, Unsupported]
+Stmt = Union[Assign, ExprStmt, Return, If, While, For, Branch, Unsupported]
 
 
 # ---- control-flow graph + def-use ------------------------------------------------
@@ -234,6 +246,7 @@ class FunctionIR:
 class ModuleIR:
     source_file: str
     functions: list[FunctionIR] = field(default_factory=list)
+    imports: dict[str, str] = field(default_factory=dict)  # local name -> fully-qualified name
 
 
 # ---- helpers ---------------------------------------------------------------------
@@ -283,6 +296,21 @@ def iter_walrus_targets(expr: Optional[Expr]) -> list[str]:
     out: list[str] = [expr.target] if isinstance(expr, Walrus) else []
     for c in _child_exprs(expr):
         out += iter_walrus_targets(c)
+    return out
+
+
+def child_exprs(expr: Expr) -> list[Optional[Expr]]:
+    """Public view of an expression's sub-expressions (source/child order)."""
+    return _child_exprs(expr)
+
+
+def iter_calls(expr: Optional[Expr]) -> list["Call"]:
+    """Every ``Call`` node inside an expression, in source order."""
+    if expr is None:
+        return []
+    out: list[Call] = [expr] if isinstance(expr, Call) else []
+    for c in _child_exprs(expr):
+        out += iter_calls(c)
     return out
 
 

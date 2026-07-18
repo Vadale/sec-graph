@@ -14,6 +14,7 @@ from .model import (
     EXIT,
     PARAM_SITE,
     Assign,
+    Branch,
     CFG,
     Def,
     DefUse,
@@ -40,6 +41,8 @@ def _sub_bodies(s: Stmt) -> list[list[Stmt]]:
         return [s.body, s.orelse]
     if isinstance(s, (While, For)):
         return [s.body]
+    if isinstance(s, Branch):
+        return list(s.arms)
     return []
 
 
@@ -115,6 +118,12 @@ def build_cfg(fn: FunctionIR) -> CFG:
         elif isinstance(s, If):
             link(s.sid, wire_seq(s.body, after, loop))
             link(s.sid, wire_seq(s.orelse, after, loop))
+        elif isinstance(s, Branch):
+            if s.arms:
+                for arm in s.arms:
+                    link(s.sid, wire_seq(arm, after, loop))
+            else:
+                link(s.sid, after)
         elif isinstance(s, (While, For)):
             inner = (s.sid, after)                     # (header, exit)
             link(s.sid, wire_seq(s.body, s.sid, inner))

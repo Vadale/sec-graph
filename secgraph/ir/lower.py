@@ -4,19 +4,19 @@ Deterministic and graphify-free. We re-parse the source ourselves (the grammar w
 come from graphify's pinned deps) because graphify's graph is entity-level and carries
 only start lines; the taint engine needs statement/variable granularity and full spans.
 
-Scope (ROADMAP Phase 1): functions (incl. decorated and methods), assignments (single,
-chained ``a = b = x``, augmented), calls, attribute/subscript access, walrus ``:=``,
-returns, and if/while/for control flow -- with correct break/continue edges.
+Scope: functions (incl. decorated and methods), assignments (single, chained ``a = b = x``,
+augmented), calls, attribute/subscript access, walrus ``:=``, returns, if/while/for control
+flow (with correct break/continue edges), and with/try/match -- their bodies are lowered
+(``with X as v`` becomes an alias def ``v = X``).
 
-Known Phase-1 limitations (tracked as Phase-2 blockers in HANDOFF, must close before/with
-the taint pass):
-  * ``with`` / ``try`` / ``match`` bodies are NOT lowered yet: the whole statement becomes
-    an ``Unsupported`` node that surfaces header reads only -- **in-block defs and returns
-    are dropped** (a false-negative source). Very common in the SQLi target scenario
-    (``with conn.cursor() as c: c.execute(q)``), so this is the first Phase-2 fix.
+Over-approximations & known gaps:
+  * try/except/else/finally and match are lowered as CFG alternatives that merge at a join
+    (a ``Branch`` node): a variable reassigned in only one clause is unioned, not killed --
+    sound for may-taint. Arms are treated as mutually-exclusive alternatives, so exception
+    edges are approximate; match pattern captures are not yet bound as defs.
   * Attribute/subscript assignment targets (``self.x = t``, ``d[k] = t``) yield no def --
-    the field-sensitive (k=1) def belongs to the Phase-2 taint model (the AccessPath model
-    already supports it).
+    Phase 2's taint engine is variable-keyed and does not yet propagate the k=1 AccessPath
+    the model can represent, so flows through ``self.x`` are missed (a Phase-3 refinement).
 Extend here, never in the engine.
 """
 from __future__ import annotations
@@ -32,6 +32,7 @@ from .model import (
     Assign,
     Attr,
     BinOp,
+    Branch,
     Call,
     Expr,
     ExprStmt,
@@ -195,6 +196,51 @@ def _lower_alternative(node, sid: Iterator[int]) -> list[Stmt]:
     return []
 
 
+def _lower_with_items(with_clause, sid: Iterator[int]) -> list[Stmt]:
+    """`with X as v` -> `v = X` (alias def); `with X` -> an expr stmt using X."""
+    out: list[Stmt] = []
+    if with_clause is None:
+        return out
+    for item in with_clause.named_children:
+        if item.type != "with_item":
+            continue
+        val = item.child_by_field_name("value")
+        if val is None:
+            kids = item.named_children
+            val = kids[0] if kids else None
+        if val is None:
+            continue
+        if val.type == "as_pattern":
+            ctx = val.named_children[0] if val.named_children else None
+            tgt = next((c for c in val.children if c.type == "as_pattern_target"), None)
+            alias = None
+            if tgt is not None:
+                ai = next((d for d in tgt.named_children if d.type == "identifier"), None)
+                alias = _text(ai) if ai is not None else None
+            value_expr = _lower_expr(ctx) if ctx is not None else Unknown("with", [], Span.of(item))
+            if alias:
+                out.append(Assign(next(sid), [alias], value_expr, Span.of(item)))
+            else:
+                out.append(ExprStmt(next(sid), value_expr, Span.of(item)))
+        else:
+            out.append(ExprStmt(next(sid), _lower_expr(val), Span.of(item)))
+    return out
+
+
+def _clause_block(clause):
+    return next((c for c in clause.children if c.type == "block"), None)
+
+
+def _iter_case_clauses(match_node):
+    for c in match_node.named_children:
+        if c.type == "case_clause":
+            yield c
+        elif c.type == "block":  # match: block wrapping the case clauses
+            for cc in c.named_children:
+                if cc.type == "case_clause":
+                    yield cc
+
+
 def _lower_stmt(node, sid: Iterator[int]) -> list[Stmt]:
     t = node.type
     span = Span.of(node)
@@ -273,9 +319,50 @@ def _lower_stmt(node, sid: Iterator[int]) -> list[Stmt]:
     if t in _TRIVIAL_STMT_TYPES:
         return [Unsupported(next(sid), t, [], span)]
 
-    # with/try/match/raise/assert/delete/...: keep, surface reads from non-block children
-    # only (do NOT lower a block as an expression). In-block defs/returns are deferred
-    # to Phase 2 -- see the module docstring.
+    if t == "with_statement":
+        clause = next((c for c in node.named_children if c.type == "with_clause"), None)
+        out = _lower_with_items(clause, sid)
+        body = node.child_by_field_name("body")
+        if body is not None:
+            out += _lower_block(body, sid)
+        return out
+
+    if t == "try_statement":
+        # arms merge at a join (Branch), so a var reassigned in only one clause is unioned,
+        # not sequentially killed. finally runs after the merge.
+        bsid = next(sid)
+        body = node.child_by_field_name("body")
+        try_arm = _lower_block(body, sid) if body is not None else []
+        handlers: list[list[Stmt]] = []
+        final_body: list[Stmt] = []
+        for clause in node.named_children:
+            ct = clause.type
+            if ct in ("except_clause", "except_group_clause"):
+                blk = _clause_block(clause)
+                handlers.append(_lower_block(blk, sid) if blk is not None else [])
+            elif ct == "else_clause":
+                blk = _clause_block(clause)
+                try_arm += _lower_block(blk, sid) if blk is not None else []  # else runs on try success
+            elif ct == "finally_clause":
+                blk = _clause_block(clause)
+                final_body = _lower_block(blk, sid) if blk is not None else []
+        return [Branch(bsid, [try_arm, *handlers], span), *final_body]
+
+    if t == "match_statement":
+        out: list[Stmt] = []
+        subject = node.child_by_field_name("subject")
+        if subject is not None:
+            out.append(ExprStmt(next(sid), _lower_expr(subject), span))
+        bsid = next(sid)
+        arms = [
+            _lower_block(_clause_block(clause), sid) if _clause_block(clause) is not None else []
+            for clause in _iter_case_clauses(node)
+        ]
+        out.append(Branch(bsid, arms, span))
+        return out
+
+    # raise/assert/delete/... : keep, surface reads from non-block children only (a block is
+    # not an expression). These have no meaningful data-flow body to lower.
     uses = [_lower_expr(c) for c in node.named_children if c.type not in _BLOCK_CONTAINER_TYPES]
     return [Unsupported(next(sid), t, uses, span)]
 
@@ -322,11 +409,52 @@ def _lower_function(fn, source_file: str) -> FunctionIR:
     )
 
 
+def _module_imports(root) -> dict[str, str]:
+    """Top-level ``import`` / ``from ... import`` bindings: local name -> FQN.
+
+    Lets the rule matcher resolve ``request`` -> ``flask.request``, ``os`` -> ``os`` etc.
+    ``import a.b`` binds the top name ``a``; ``import x as y`` and ``from m import n as y``
+    bind the alias.
+    """
+    imap: dict[str, str] = {}
+
+    def visit(node) -> None:
+        if node.type == "import_statement":
+            for c in node.named_children:
+                if c.type == "dotted_name":
+                    top = _text(c).split(".", 1)[0]
+                    imap[top] = top
+                elif c.type == "aliased_import":
+                    name = c.child_by_field_name("name")
+                    alias = c.child_by_field_name("alias")
+                    if name is not None and alias is not None:
+                        imap[_text(alias)] = _text(name)
+        elif node.type == "import_from_statement":
+            kids = node.named_children
+            if kids:
+                module = _text(kids[0]) if kids[0].type in ("dotted_name", "relative_import") else ""
+                for c in kids[1:]:
+                    if c.type == "dotted_name":
+                        local = _text(c).split(".", 1)[0]
+                        imap[local] = f"{module}.{_text(c)}" if module else _text(c)
+                    elif c.type == "aliased_import":
+                        name = c.child_by_field_name("name")
+                        alias = c.child_by_field_name("alias")
+                        if name is not None and alias is not None:
+                            imap[_text(alias)] = f"{module}.{_text(name)}" if module else _text(name)
+        for c in node.children:
+            visit(c)
+
+    visit(root)
+    return imap
+
+
 def lower_source(src: bytes, source_file: str) -> ModuleIR:
-    """Lower one Python source buffer into a ``ModuleIR`` (functions only, for now)."""
+    """Lower one Python source buffer into a ``ModuleIR`` (functions + import map)."""
     tree = _parser().parse(src)
-    functions = [_lower_function(fn, source_file) for fn in _iter_function_defs(tree.root_node)]
-    return ModuleIR(source_file=source_file, functions=functions)
+    root = tree.root_node
+    functions = [_lower_function(fn, source_file) for fn in _iter_function_defs(root)]
+    return ModuleIR(source_file=source_file, functions=functions, imports=_module_imports(root))
 
 
 def lower_file(path: Path | str, source_file: Optional[str] = None) -> ModuleIR:

@@ -28,6 +28,22 @@ def analyze(path: str, out_dir: str = "graphify-out") -> None:
 
 
 @app.command()
+def scan(path: str) -> None:
+    """Scan PATH for intraprocedural taint findings (source -> sink). Phase 2."""
+    # No graphify needed: this drives the IR + taint engine directly.
+    from secgraph.taint import scan_project
+
+    findings = scan_project(path)
+    for f in findings:
+        typer.echo(
+            f"{f.severity.upper():8} {f.cwe or '-':7} {f.source_file}: "
+            f"{f.source_id}@L{f.source_line} -> {f.sink_id}@L{f.sink_line} "
+            f"[{','.join(f.layers)}] ({f.confidence})"
+        )
+    typer.echo(f"{len(findings)} finding(s).")
+
+
+@app.command()
 def view() -> None:
     """Open the interactive layered map (secgraph.html)."""
     raise NotImplementedError("ROADMAP.md Phase 5")
