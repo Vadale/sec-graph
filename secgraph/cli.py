@@ -9,9 +9,22 @@ app = typer.Typer(
 
 
 @app.command()
-def analyze(path: str) -> None:
-    """Analyze PATH: build graph.json + taint.json + secgraph.html."""
-    raise NotImplementedError("WP0 / ROADMAP.md Phase 0")
+def analyze(path: str, out_dir: str = "graphify-out") -> None:
+    """Analyze PATH: build graph.json (taint.json + secgraph.html come later)."""
+    # Lazy import so `view`/`serve`/`--help` never pay graphify's import cost, and so
+    # the quarantine wall stays put: the CLI imports the adapter, never graphify.
+    from secgraph import graphify_adapter
+
+    try:
+        result = graphify_adapter.run_graphify(path, out_dir)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        typer.secho(f"error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(
+        f"Wrote {result.graph_json} "
+        f"({result.n_nodes} nodes, {result.n_edges} edges, {result.n_calls} calls)"
+    )
 
 
 @app.command()
