@@ -80,6 +80,7 @@ class Call:
     func: "Expr"
     args: list["Expr"]
     span: Span
+    kw_names: list[Optional[str]] = field(default_factory=list)  # parallel to args; None = positional
 
 
 @dataclass(slots=True)
@@ -238,6 +239,7 @@ class FunctionIR:
     span: Span
     source_file: str
     enclosing_class: Optional[str] = None  # set for methods (excluded from the module FQN index)
+    field_escape: bool = False             # writes an arg to self.x / d[k] (an untracked channel)
     graphify_node: Optional[str] = None    # filled by secgraph.ir.join
     cfg: Optional[CFG] = None
     defuse: Optional[DefUse] = None

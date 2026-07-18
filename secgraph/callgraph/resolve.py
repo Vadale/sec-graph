@@ -57,15 +57,19 @@ Origin = Union[str, tuple]  # "external" | "project-fn" | "unknown" | ("class", 
 @dataclass(frozen=True, slots=True)
 class Binding:
     target: FnKey
-    provenance: str    # "import" | "local" | "oracle"
+    provenance: str                       # "import" | "local" | "oracle" | "method-recv"
     name: str
+    kind: str = "function"                # function | constructor | method
+    arg_to_param: tuple = ()              # call.args[i] -> callee param index (None if unmapped)
+    receiver_param: Optional[int] = None  # 0 for method/constructor binds (self)
+    over_approx: bool = False             # engine must union the fallback (constructor / field-escaping method)
 
 
 @dataclass(slots=True)
 class ClassInfo:
     fqn: str
     bases: list[str]
-    methods: set
+    methods: dict  # method name -> FnKey
 
 
 @dataclass(slots=True)
@@ -128,7 +132,7 @@ def build_index(modules: list[ModuleIR]) -> FnIndex:
     for module in modules:
         mod = module_name(module.source_file)
         for clsname, bases in module.classes.items():
-            idx.classes.setdefault(f"{mod}.{clsname}", ClassInfo(f"{mod}.{clsname}", list(bases), set()))
+            idx.classes.setdefault(f"{mod}.{clsname}", ClassInfo(f"{mod}.{clsname}", list(bases), {}))
         for name, val in module.globals.items():
             idx.globals.setdefault(f"{mod}.{name}", val)
         for fn in module.functions:
@@ -137,7 +141,7 @@ def build_index(modules: list[ModuleIR]) -> FnIndex:
             if fn.enclosing_class:
                 ci = idx.classes.get(f"{mod}.{fn.enclosing_class}")
                 if ci is not None:
-                    ci.methods.add(fn.name)
+                    ci.methods.setdefault(fn.name, key)
             elif not _is_nested(fn, module.functions):
                 idx.by_fqn.setdefault(f"{mod}.{fn.name}", key)
     for name in idx.by_name:
@@ -204,7 +208,12 @@ def _local_types(fn: FunctionIR, module: ModuleIR, index: FnIndex) -> dict[str, 
     conflict: set[str] = set()
     for stmt in (fn.cfg.stmt_of.values() if fn.cfg else []):
         if isinstance(stmt, Assign) and len(stmt.targets) == 1 and isinstance(stmt.value, Call):
-            origin = _origin_of_fqn(resolve_fqn(stmt.value.func, imap), index)
+            func = stmt.value.func
+            origin = _origin_of_fqn(resolve_fqn(func, imap), index)
+            if origin == "external" and isinstance(func, Name):     # a same-module class?
+                same = f"{module_name(module.source_file)}.{func.ident}"
+                if same in index.classes:
+                    origin = ("class", same)
             v = stmt.targets[0]
             if v in types and types[v] != origin:
                 conflict.add(v)
@@ -230,8 +239,42 @@ def _receiver_origin(base: str, fn: FunctionIR, module: ModuleIR, index: FnIndex
     return "unknown"
 
 
-def _bound_fn(k: FnKey, provenance: str, index: FnIndex) -> Binding:
-    return Binding(k, provenance, index.fn_of[k].name)
+def _arg_map(call: Call, callee_params: list[str], has_receiver: bool) -> tuple:
+    """Map each call arg to the callee param index (self offset applied; kwargs by name)."""
+    offset = 1 if has_receiver else 0
+    pos_params = callee_params[offset:]
+    kw = call.kw_names if call.kw_names else [None] * len(call.args)
+    out: list[Optional[int]] = []
+    pos_i = 0
+    for i in range(len(call.args)):
+        name = kw[i] if i < len(kw) else None
+        if name is not None:
+            out.append(callee_params.index(name) if name in callee_params else None)
+        elif pos_i < len(pos_params):
+            out.append(offset + pos_i)
+            pos_i += 1
+        else:
+            out.append(None)                                 # *args overflow / arity mismatch
+    return tuple(out)
+
+
+def _make_binding(call: Call, target: FnKey, provenance: str, kind: str, index: FnIndex) -> Binding:
+    fn = index.fn_of[target]
+    # a receiver slot exists only if the first param is self/cls (so @staticmethod binds
+    # without one and does not drop the real first arg).
+    has_receiver = kind in ("method", "constructor") and bool(fn.params) and fn.params[0] in ("self", "cls")
+    # a constructor always stores args on self; a method that writes self.x/d[k] can launder an
+    # arg through an untracked channel -- both need the fallback floor so taint is not cleared.
+    over_approx = kind == "constructor" or (kind == "method" and fn.field_escape)
+    return Binding(target, provenance, fn.name, kind, _arg_map(call, fn.params, has_receiver),
+                   0 if has_receiver else None, over_approx)
+
+
+def _constructor_binding(call: Call, class_fqn: str, provenance: str, index: FnIndex) -> Optional[Binding]:
+    ci = index.classes.get(class_fqn)
+    if ci is not None and "__init__" in ci.methods:
+        return _make_binding(call, ci.methods["__init__"], provenance, "constructor", index)
+    return None  # no user __init__: metric-bound, engine over-approximates the result
 
 
 def classify_site(
@@ -250,43 +293,48 @@ def classify_site(
         if f.ident in module.imports:
             fqn = module.imports[f.ident]
             if fqn in index.by_fqn:
-                return "bound-import", _bound_fn(index.by_fqn[fqn], "import", index)
+                return "bound-import", _make_binding(call, index.by_fqn[fqn], "import", "function", index)
             if fqn in index.classes:
-                return "bound", None                         # constructor (metric; engine binding deferred)
+                return "bound", _constructor_binding(call, fqn, "import", index)
             top = fqn.split(".", 1)[0]
             return ("external" if top not in index.project_tops else "unresolved-project"), None
         local = f"{module_name(module.source_file)}.{f.ident}"
         if local in index.by_fqn:
-            return "bound-local", _bound_fn(index.by_fqn[local], "local", index)
+            return "bound-local", _make_binding(call, index.by_fqn[local], "local", "function", index)
         if local in index.classes:
-            return "bound", None                             # same-module constructor
+            return "bound", _constructor_binding(call, local, "local", index)
         if f.ident in _BUILTINS:
             return "builtin", None
         return "unresolved-project", None
 
     if isinstance(f, Attr):
-        fqn = resolve_fqn(f, imap)
-        if fqn is not None:
-            if fqn in index.by_fqn:
-                return "bound-import", _bound_fn(index.by_fqn[fqn], "import", index)
-            if fqn in index.classes:
-                return "bound", None
-            if fqn.split(".", 1)[0] not in index.project_tops:
-                return "external", None
         base = _base_name(f.value)
+        # Trust resolve_fqn only when the base is an imported name (a real module path); for a
+        # local variable receiver its identity resolution (`s.run`) is spurious -- fall through
+        # to the receiver-origin path, which types `s` from `s = Svc()`.
+        if base is not None and base in imap:
+            fqn = resolve_fqn(f, imap)
+            if fqn is not None:
+                if fqn in index.by_fqn:
+                    return "bound-import", _make_binding(call, index.by_fqn[fqn], "import", "function", index)
+                if fqn in index.classes:
+                    return "bound", _constructor_binding(call, fqn, "import", index)
+                if fqn.split(".", 1)[0] not in index.project_tops:
+                    return "external", None
         origin = _receiver_origin(base, fn, module, index) if base else "unknown"
         if origin in ("external", "project-fn"):
             return "external", None
         if isinstance(origin, tuple) and origin[0] == "class":
             ci = index.classes.get(origin[1])
             if ci is not None and f.attr in ci.methods:
-                return "bound", None                         # project method (metric)
+                return "bound", _make_binding(call, ci.methods[f.attr], "method-recv", "method", index)
             if ci is not None and _class_is_library_backed(origin[1], index):
                 return "external", None                      # method inherited from a library base
             return "unresolved-project", None
         cands = sorted(k for k in index.by_name.get(f.attr, ()) if k in oracle.get(fn_key(fn), frozenset()))
         if len(cands) == 1:
-            return "bound-oracle", _bound_fn(cands[0], "oracle", index)
+            kind = "method" if index.fn_of[cands[0]].enclosing_class else "function"
+            return "bound-oracle", _make_binding(call, cands[0], "oracle", kind, index)
         return "unknown-receiver", None
 
     return "unknown-receiver", None

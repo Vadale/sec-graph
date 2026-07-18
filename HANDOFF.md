@@ -1,9 +1,13 @@
 # HANDOFF — state for the next session
 
 ## Where we are
-Bootstrap + **WP0 + WP1 + WP2 + WP3 complete, incl. the KILL-GATE which now PASSES. 50 tests
-green.** All reviewed by the `reviewer` agent, hardened, and simplify-passed. Dev env `.venv`
-(`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
+Bootstrap + **WP0 + WP1 + WP2 + WP3 + WP3-b complete, incl. the KILL-GATE which PASSES. 56
+tests green.** All reviewed by the `reviewer` agent, hardened, and simplify-passed. Dev env
+`.venv` (`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
+
+**WP3-b**: resolved method/constructor call binds now carry taint (arg->param/receiver map,
+`kw_names`, and an over-approx floor so a constructor / field-escaping method never CLEARS
+taint). Benchmark bound counts rose (microblog 59->90); PCR 100%/93.8%/96%.
 
 **KILL-GATE RESULT (ADR-007 metric):** PCR (project-call resolution) = **100% / 99.4% / 94.7%**
 on microblog / fastapi-realworld / flask-realworld (gate >=85%); UNK 11-18% (<=40%). The raw
@@ -22,20 +26,22 @@ See `diary/2026-07-18-05-wp3.md` and earlier `-04/-03/-02`.
 `DECISIONS.md` ADR-000..007 (ADR-007 re-specifies the KILL-GATE metric).
 
 ## Next session — pick one
-### A. WP3-b — make the resolved edges carry taint (the natural follow-on)
-The classifier now BINDS methods/constructors, but the taint ENGINE still only consumes
-project-*function* summaries (so the 50 tests stayed byte-identical). Wire the rest:
-- **Constructor-taint rule** (soundness trap): `User(tainted)` result = fallback over-approx
-  UNION summary — NEVER trust a constructor's empty `return_params` (that would *clear* taint).
-- **arg->param / receiver-param map** + `Call.kw_names` (methods shift self=param0; kwargs need
-  name mapping) — fixes a latent mis-map before it ships.
-- TRR instrumentation (the taint-relevant metric); SQLAlchemy/WTForms **rules packs** (the
-  biggest TRR mover on ORM code — YAML, not engine); a pinned `tests/benchmarks/` harness;
-  the graphify `calls` **differential validator**.
-Have `reviewer` audit the engine changes for the "binding clears taint" trap and `tester`
-write the adversarial `User(request.args[...])` fixture.
+### A. Rules packs + TRR (biggest value-per-effort on ORM code)
+`rules/python/sqlalchemy.yml` + `wtforms.yml`: propagators for `where/order_by/filter_by/
+select_from/scalars/scalar/all/first/paginate`, WTForms `.data` as an attribute source,
+`db.session.execute`+`text()` sink shape. On ORM code the blind mass is library query-builder
+methods, so **library modeling (YAML), not more resolution, is what makes tainted paths
+legible** (per ADR-007's kill-criterion). Then add TRR instrumentation (taint-relevant
+resolution) to `callgraph-stats` and a pinned `tests/benchmarks/` harness.
 
-### B. More resolver precision (optional, lower priority)
+### B. Phase 4 — projection + viz (the demo)
+Annotate `graph.json` (coarse) + emit `taint.json` (fine) per the sidecar discipline; fork
+graphify's HTML into `secgraph/viz.py` with the layer toggles + path sidebar. The site
+taxonomy (external / project / unknown-receiver) is the edge-label vocabulary this renders.
+Mind the WP0/WP1 Phase-4 follow-ups (graph.json filename collision; take the file set from the
+adapter's `detect_files`).
+
+### C. More resolver/summary precision (lower priority)
 - **H2 (field-sensitivity, the important one):** a RESOLVED callee that launders taint
   through `d[k]=x` / `self.x=x` / a global has empty `return_params`, so callers miss the
   flow -> `run_project` can under-report vs the pure-intra over-approx (the `intra <= inter`

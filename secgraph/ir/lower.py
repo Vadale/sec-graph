@@ -118,8 +118,8 @@ def _lower_expr(node) -> Expr:
         return Index(_lower_expr(value), _lower_expr(idx) if idx is not None else None, span)
     if t == "call":
         func = node.child_by_field_name("function")
-        arglist = node.child_by_field_name("arguments")
-        return Call(_lower_expr(func), _lower_args(arglist), span)
+        args, kw_names = _lower_args(node.child_by_field_name("arguments"))
+        return Call(_lower_expr(func), args, span, kw_names)
     if t in _BINARY_TYPES:
         left = node.child_by_field_name("left")
         right = node.child_by_field_name("right")
@@ -133,22 +133,28 @@ def _lower_expr(node) -> Expr:
     return Unknown(t, [_lower_expr(c) for c in node.named_children], span)
 
 
-def _lower_args(arglist) -> list[Expr]:
+def _lower_args(arglist) -> tuple[list[Expr], list[Optional[str]]]:
+    """Return (arg exprs, parallel keyword names). A positional/splat arg has name None."""
     if arglist is None:
-        return []
-    out: list[Expr] = []
+        return [], []
+    args: list[Expr] = []
+    names: list[Optional[str]] = []
     for c in arglist.named_children:
         if c.type == "comment":
             continue
         if c.type == "keyword_argument":
+            name = c.child_by_field_name("name")
             v = c.child_by_field_name("value")
-            out.append(_lower_expr(v) if v is not None else Unknown(c.type, [], Span.of(c)))
+            args.append(_lower_expr(v) if v is not None else Unknown(c.type, [], Span.of(c)))
+            names.append(_text(name) if name is not None else None)
         elif c.type in ("list_splat", "dictionary_splat"):
             inner = c.named_children
-            out.append(_lower_expr(inner[0]) if inner else Unknown(c.type, [], Span.of(c)))
+            args.append(_lower_expr(inner[0]) if inner else Unknown(c.type, [], Span.of(c)))
+            names.append(None)
         else:
-            out.append(_lower_expr(c))
-    return out
+            args.append(_lower_expr(c))
+            names.append(None)
+    return args, names
 
 
 # ---- statements (each lowers to zero or more IR statements) -----------------------
@@ -394,6 +400,25 @@ def _iter_function_defs(node) -> Iterator:
         yield from _iter_function_defs(c)
 
 
+def _has_field_escape(fn_node) -> bool:
+    """True if the function writes an attribute/subscript target (``self.x = ``, ``d[k] = ``) --
+    an untracked channel, so an interprocedural summary through it must be over-approximated."""
+    body = fn_node.child_by_field_name("body")
+    if body is None:
+        return False
+    stack = list(body.children)
+    while stack:
+        n = stack.pop()
+        if n.type in ("function_definition", "class_definition"):
+            continue                        # a nested scope: its writes are its own
+        if n.type in ("assignment", "augmented_assignment"):
+            left = n.child_by_field_name("left")
+            if left is not None and left.type in ("attribute", "subscript"):
+                return True
+        stack.extend(n.children)
+    return False
+
+
 def _lower_function(fn, source_file: str) -> FunctionIR:
     name_node = fn.child_by_field_name("name")
     params = _param_names(fn.child_by_field_name("parameters"))
@@ -406,6 +431,7 @@ def _lower_function(fn, source_file: str) -> FunctionIR:
         body=body,
         span=Span.of(fn),
         source_file=source_file,
+        field_escape=_has_field_escape(fn),
     )
 
 

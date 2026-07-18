@@ -53,6 +53,19 @@ def _sink_param_key(item):
     return (i, sp.sink_id, sp.file, sp.function, sp.line, sp.via)
 
 
+def _param_expr(call: Call, binding, p: int):
+    """The call expression bound to callee param index ``p`` (the receiver object for a method,
+    or a mapped positional/keyword arg). A constructor's ``self`` (receiver_param 0) maps to no
+    expression -- the new instance -- so its taint comes from the over-approx below, not here."""
+    if binding.receiver_param == p:
+        f = call.func
+        return f.value if isinstance(f, Attr) else None
+    for i, mp in enumerate(binding.arg_to_param):
+        if mp == p and i < len(call.args):
+            return call.args[i]
+    return None
+
+
 @dataclass(slots=True)
 class TaintCtx:
     """What a taint run needs. With the defaults (no sites, no seeding) the run is byte-
@@ -101,15 +114,18 @@ def expr_taint(expr, state: State, ctx: TaintCtx) -> frozenset:
         if binding is not None:                       # RESOLVED call -> use summary (even if bottom)
             summ = ctx.summaries.get(binding.target, EMPTY_SUMMARY)
             out = set(summ.return_origins)
-            for i in sorted(summ.return_params):
-                if i < len(expr.args):
-                    out |= expr_taint(expr.args[i], state, ctx)
+            for p in sorted(summ.return_params):
+                e = _param_expr(expr, binding, p)
+                if e is not None:
+                    out |= expr_taint(e, state, ctx)
+            if binding.over_approx:
+                # a constructor (returns None, stores args on self) or a method that writes
+                # self.x / d[k] launders args through an untracked channel, so its summary
+                # under-approximates -- trusting it would CLEAR taint. Union the fallback.
+                out |= _call_over_approx(expr, state, ctx)
             return frozenset(out)
         # UNRESOLVED call -> over-approximate: tainted if receiver or any arg is
-        out = expr_taint(expr.func, state, ctx)
-        for a in expr.args:
-            out |= expr_taint(a, state, ctx)
-        return out
+        return _call_over_approx(expr, state, ctx)
 
     if isinstance(expr, Name):
         return state.get(expr.ident, frozenset())
@@ -127,6 +143,16 @@ def expr_taint(expr, state: State, ctx: TaintCtx) -> frozenset:
             out |= expr_taint(c, state, ctx)
         return out
     return frozenset()
+
+
+def _call_over_approx(expr: Call, state: State, ctx: TaintCtx) -> frozenset:
+    """Over-approximate a call's taint from its inputs: the callee/receiver expression
+    unioned with every argument. The fallback for unresolved calls and the over-approx
+    floor under a resolved binding whose summary may under-approximate."""
+    out = expr_taint(expr.func, state, ctx)
+    for a in expr.args:
+        out |= expr_taint(a, state, ctx)
+    return out
 
 
 def _transfer(stmt: Stmt, state: State, ctx: TaintCtx) -> State:
@@ -256,10 +282,11 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary]:
                         wctx.summaries.get(binding.target, EMPTY_SUMMARY).sink_params,
                         key=_sink_param_key,
                     )
-                    for i, sp in summ_sinks:
-                        if i < len(call.args):
+                    for p, sp in summ_sinks:
+                        e = _param_expr(call, binding, p)
+                        if e is not None:
                             sp2 = _lift(sp, binding.name, binding.provenance)
-                            for o in expr_taint(call.args[i], state, wctx):
+                            for o in expr_taint(e, state, wctx):
                                 _emit(o, sp2, sink_params)
         if isinstance(stmt, Return) and stmt.value is not None:    # (C) return facts
             for o in expr_taint(stmt.value, IN[sid], wctx):

@@ -101,6 +101,70 @@ def test_method_name_collision_binds_to_function_not_method() -> None:
     assert any(f.sink_id == "py-sql-exec" for f in fs)
 
 
+def test_constructor_does_not_clear_taint() -> None:
+    # WP3-b soundness trap: User.__init__ returns None and stores the arg on self (no def),
+    # so its summary return_params is empty. Trusting it would CLEAR taint; the engine must
+    # over-approximate so `u = User(tainted)` keeps taint.
+    fs = _scan({
+        "models.py": b"class User:\n    def __init__(self, name):\n        self.name = name\n",
+        "app.py": (b"from flask import request\nfrom models import User\n"
+                   b"def q(cur):\n    u = User(request.args['id'])\n    cur.execute(u.name)\n"),
+    })
+    assert any(f.sink_id == "py-sql-exec" for f in fs)
+
+
+def test_taint_through_project_method() -> None:
+    # method summary: Svc.run's param q reaches a sink; the caller passes tainted at that arg
+    # (receiver self -> param 0, so the arg maps to param 1).
+    fs = _scan({
+        "svc.py": b"class Svc:\n    def run(self, q, cur):\n        cur.execute(q)\n",
+        "app.py": (b"from flask import request\nfrom svc import Svc\n"
+                   b"def h(cur):\n    s = Svc()\n    s.run(request.args['id'], cur)\n"),
+    })
+    assert any(f.sink_id == "py-sql-exec" and f.sink_function == "run" for f in fs)
+
+
+def test_keyword_argument_maps_to_correct_param() -> None:
+    # run(a, q, cur): q reaches the sink; caller passes it BY KEYWORD out of order
+    fs = _scan({
+        "svc.py": b"def run(a, q, cur):\n    cur.execute(q)\n",
+        "app.py": (b"from flask import request\nfrom svc import run\n"
+                   b"def h(cur):\n    run(1, cur=cur, q=request.args['id'])\n"),
+    })
+    assert any(f.sink_id == "py-sql-exec" for f in fs)
+
+
+def test_method_field_escape_does_not_clear_taint() -> None:
+    # reviewer WP3-b #1: `wrap` stores its arg on self and returns it, so the method summary
+    # under-approximates; the over_approx floor (method with self.x=) must keep the taint.
+    fs = _scan({
+        "m.py": b"class C:\n    def wrap(self, q):\n        self.q = q\n        return self.q\n",
+        "app.py": (b"from flask import request\nfrom m import C\n"
+                   b"def h(cur):\n    c = C()\n    cur.execute(c.wrap(request.args['id']))\n"),
+    })
+    assert any(f.sink_id == "py-sql-exec" for f in fs)
+
+
+def test_staticmethod_does_not_drop_first_arg() -> None:
+    # reviewer WP3-b #2: @staticmethod has no self, so the first arg maps to param 0
+    fs = _scan({
+        "m.py": b"class C:\n    @staticmethod\n    def run(x, cur):\n        cur.execute(x)\n",
+        "app.py": (b"from flask import request\nfrom m import C\n"
+                   b"def h(cur):\n    C.run(request.args['id'], cur)\n"),
+    })
+    assert any(f.sink_id == "py-sql-exec" for f in fs)
+
+
+def test_same_module_class_method_resolves() -> None:
+    # reviewer WP3-b #3: `v = C()` in the SAME module must type v as C (Tier-1), not external
+    fs = _scan({
+        "app.py": (b"from flask import request\n"
+                   b"class C:\n    def run(self, q, cur):\n        cur.execute(q)\n\n"
+                   b"def h(cur):\n    v = C()\n    v.run(request.args['id'], cur)\n"),
+    })
+    assert any(f.sink_id == "py-sql-exec" for f in fs)
+
+
 def test_adr007_library_object_external_and_constructor_bound() -> None:
     from secgraph.callgraph.resolve import build_index, classify_site
     from secgraph.ir import analyze_module, lower_source
