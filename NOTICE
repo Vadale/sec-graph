@@ -1,0 +1,17 @@
+sec-graph
+Copyright 2026 Alessandro Vadala
+
+Licensed under the Apache License, Version 2.0 (the "License"); see the LICENSE file.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+This project is built on top of graphify (https://github.com/safishamsi/graphify),
+licensed under the MIT License. graphify is a runtime dependency (installed as the
+`graphifyy` package) and is NOT redistributed in this repository.
+
+PLANNED (Phase 5): `secgraph/viz.py` will adapt graphify's MIT-licensed vis-network
+HTML template. When that code is incorporated, graphify's MIT license text and
+copyright notice will be reproduced in this section. As of this commit, no graphify
+source code has been copied into this repository.

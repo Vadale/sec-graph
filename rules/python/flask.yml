@@ -1,0 +1,38 @@
+# Flask source/sink/sanitizer rules. Matched against the IR by resolved FQN + call
+# shape (not regex over text). Seeded in Phase 2. See ROADMAP.md Section 10.
+language: python
+framework: flask
+imports:
+  - { module: flask, names: [request, session, make_response] }
+sources:
+  - id: flask-request-input
+    kind: attribute-read
+    base: flask.request
+    attributes: [args, form, values, json, data, cookies, headers, files]
+    layers: [untrusted-input]
+  - id: env-secret
+    kind: call
+    callee: [os.getenv, os.environ.get]
+    layers: [untrusted-input, credentials]
+    confidence: medium
+sinks:
+  - id: py-sql-exec
+    kind: call
+    callee: [".execute", ".executemany", ".executescript"]
+    fqn_hint: [sqlite3, psycopg2, sqlalchemy]
+    taint_args: [0]
+    layers: [dangerous-sink]
+    cwe: CWE-89
+    severity: high
+  - id: py-os-command
+    kind: call
+    callee: [os.system, os.popen, subprocess.call, subprocess.run, subprocess.Popen]
+    taint_args: [0]
+    layers: [dangerous-sink]
+    cwe: CWE-78
+    severity: critical
+sanitizers:
+  - { id: shlex-quote, kind: call, callee: [shlex.quote], clears: return }
+  - { id: int-coerce, kind: call, callee: [int, float], clears: return, applies_to_layers: [dangerous-sink] }
+propagators:
+  - { id: str-format, kind: call, callee: [".format", "json.dumps"], from_args: [any], to: return }

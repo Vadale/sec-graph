@@ -1,0 +1,4 @@
+# Deterministic layer dictionaries (identifier regexes, entropy thresholds, formats).
+# See ROADMAP.md Section 11 (Phase 4). Stub - to be filled in Phase 4.
+version: 1
+layers: {}
