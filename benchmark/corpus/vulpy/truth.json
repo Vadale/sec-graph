@@ -1,0 +1,315 @@
+{
+  "repo": "vulpy",
+  "commit": "5249cc8",
+  "sarif_sha256": "sha256:097335e65b42b1f324f79b021892a67e46e2e901714b8b383fda7a1f5b3af05b",
+  "labeller": "claude-drafted-blind; maintainer-verified",
+  "process": "PROTOCOL.md#2",
+  "findings": [
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "bad/libuser.py",
+        "line": 12,
+        "fingerprint": "87f19d40ee7aefaf:1",
+        "ordinal": 0
+      },
+      "codeql_secsev": "8.8",
+      "real": true,
+      "vuln_class": "sql-injection",
+      "guard": "unguarded",
+      "guard_evidence": "bad/mod_user.py:9 \u2014 @route('/login') public",
+      "severity": "critical",
+      "severity_rationale": "str.format of form username/password into SELECT (libuser.py:12); pre-auth auth-bypass (username=\"' OR '1'='1\")",
+      "true_source": "bad/mod_user.py:16-17 request.form",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "bad/libuser.py",
+        "line": 25,
+        "fingerprint": "dca96e071a47ec37:1",
+        "ordinal": 1
+      },
+      "codeql_secsev": "8.8",
+      "real": true,
+      "vuln_class": "sql-injection",
+      "guard": "unguarded",
+      "guard_evidence": "bad/mod_user.py:38 \u2014 @route('/create') public registration",
+      "severity": "critical",
+      "severity_rationale": "%-format of form username/password into INSERT (libuser.py:25); pre-auth SQLi",
+      "true_source": "bad/mod_user.py:45-46 request.form",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "bad/libuser.py",
+        "line": 53,
+        "fingerprint": "baab2915c71ea6b1:1",
+        "ordinal": 2
+      },
+      "codeql_secsev": "8.8",
+      "real": true,
+      "vuln_class": "sql-injection",
+      "guard": "guarded",
+      "guard_evidence": "bad/mod_user.py:64,80 \u2014 /chpasswd uses g.session['username'] (session gate present)",
+      "severity": "critical",
+      "severity_rationale": "form 'password' str.format into UPDATE (libuser.py:53); the session is UNSIGNED base64 (libsession.py:6-7) => forgeable => de-facto pre-auth; injection changes arbitrary users' passwords => account takeover",
+      "true_source": "bad/mod_user.py:70 request.form['password'] + g.session['username']",
+      "notes": "guarded is structural; forgeable session drives severity to critical"
+    },
+    {
+      "key": {
+        "rule_id": "py/cookie-injection",
+        "file": "bad/libsession.py",
+        "line": 7,
+        "fingerprint": "3888b82276d24dfe:1",
+        "ordinal": 3
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "cookie-injection",
+      "guard": "unguarded",
+      "guard_evidence": "bad/mod_user.py:9 \u2014 session created at public /login via libsession.create",
+      "severity": "high",
+      "severity_rationale": "untrusted username placed in an UNSIGNED base64 session cookie with no MAC (libsession.py:6-7); attacker forges {'username':'admin'} => session forgery/auth bypass",
+      "true_source": "bad/mod_user.py:16 username",
+      "notes": "MULTI-CLASS: CodeQL rule=cookie-injection (secsev 5.0) but base64 neutralizes header-injection; the REAL issue is broken session integrity (forgery). Labelled real by the forgery impact"
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "good/vulpy-ssl.py",
+        "line": 29,
+        "fingerprint": "b0c28a6e08dc0c46:1",
+        "ordinal": 4
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "debug-mode",
+      "guard": "n/a",
+      "guard_evidence": "good/vulpy-ssl.py:29 \u2014 app.run(debug=True) is the app entrypoint",
+      "severity": "high",
+      "severity_rationale": "Flask debug=True enables the Werkzeug interactive debugger (RCE) + tracebacks; localhost bind is a mitigating factor",
+      "true_source": "",
+      "notes": "present in BOTH bad/ and good/ trees (good/ did not remove debug=True)"
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "bad/vulpy-ssl.py",
+        "line": 29,
+        "fingerprint": "b0c28a6e08dc0c46:1",
+        "ordinal": 5
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "debug-mode",
+      "guard": "n/a",
+      "guard_evidence": "bad/vulpy-ssl.py:29 \u2014 app.run(debug=True) is the app entrypoint",
+      "severity": "high",
+      "severity_rationale": "Flask debug=True enables the Werkzeug interactive debugger (RCE) + tracebacks; localhost bind is a mitigating factor",
+      "true_source": "",
+      "notes": "present in BOTH bad/ and good/ trees (good/ did not remove debug=True)"
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "good/vulpy.py",
+        "line": 53,
+        "fingerprint": "92d0ce9893394f28:1",
+        "ordinal": 6
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "debug-mode",
+      "guard": "n/a",
+      "guard_evidence": "good/vulpy.py:53 \u2014 app.run(debug=True) is the app entrypoint",
+      "severity": "high",
+      "severity_rationale": "Flask debug=True enables the Werkzeug interactive debugger (RCE) + tracebacks; localhost bind is a mitigating factor",
+      "true_source": "",
+      "notes": "present in BOTH bad/ and good/ trees (good/ did not remove debug=True)"
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "bad/vulpy.py",
+        "line": 55,
+        "fingerprint": "acec19fa0fda9f4d:1",
+        "ordinal": 7
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "debug-mode",
+      "guard": "n/a",
+      "guard_evidence": "bad/vulpy.py:55 \u2014 app.run(debug=True) is the app entrypoint",
+      "severity": "high",
+      "severity_rationale": "Flask debug=True enables the Werkzeug interactive debugger (RCE) + tracebacks; localhost bind is a mitigating factor",
+      "true_source": "",
+      "notes": "present in BOTH bad/ and good/ trees (good/ did not remove debug=True)"
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-storage-sensitive-data",
+        "file": "bad/api_post.py",
+        "line": 27,
+        "fingerprint": "7bddd08d3c2aa99:1",
+        "ordinal": 8
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "bad/api_post.py \u2014 CLI API client, not a web route",
+      "severity": "low",
+      "severity_rationale": "client writes its received API key to a file in cleartext (api_post.py:27); hygiene, local file, client's own secret",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "bad/api_post.py",
+        "line": 24,
+        "fingerprint": "638ee9236888f142:1",
+        "ordinal": 9
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "bad/api_post.py \u2014 CLI API client",
+      "severity": "low",
+      "severity_rationale": "client prints its API key to stdout (api_post.py:24); cleartext logging of a secret, low impact",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "bad/brute.py",
+        "line": 23,
+        "fingerprint": "acb1e247937cdbaf:1",
+        "ordinal": 10
+      },
+      "codeql_secsev": "7.5",
+      "real": false,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "bad/brute.py:23 \u2014 standalone offensive/utility CLI script, not part of the vulpy web app's attack surface",
+      "severity": "low",
+      "severity_rationale": "FP: brute-force PoC prints the cracked password \u2014 the logged value is the operator's own wordlist/target data, printing it is the tool's purpose, not an app vulnerability",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "utils/crack-cvv.py",
+        "line": 17,
+        "fingerprint": "c2b3cbedb39d7d9b:1",
+        "ordinal": 11
+      },
+      "codeql_secsev": "7.5",
+      "real": false,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "utils/crack-cvv.py:17 \u2014 standalone offensive/utility CLI script, not part of the vulpy web app's attack surface",
+      "severity": "low",
+      "severity_rationale": "FP: offline CVV-hash cracker prints the cracked CVV \u2014 the logged value is the operator's own wordlist/target data, printing it is the tool's purpose, not an app vulnerability",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "good/cutpasswd.py",
+        "line": 20,
+        "fingerprint": "928ad1ec23ad485c:1",
+        "ordinal": 12
+      },
+      "codeql_secsev": "7.5",
+      "real": false,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "good/cutpasswd.py:20 \u2014 standalone offensive/utility CLI script, not part of the vulpy web app's attack surface",
+      "severity": "low",
+      "severity_rationale": "FP: password-wordlist filter prints dictionary entries \u2014 the logged value is the operator's own wordlist/target data, printing it is the tool's purpose, not an app vulnerability",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "utils/httpbrute.py",
+        "line": 26,
+        "fingerprint": "4f3443320e021643:1",
+        "ordinal": 13
+      },
+      "codeql_secsev": "7.5",
+      "real": false,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "utils/httpbrute.py:26 \u2014 standalone offensive/utility CLI script, not part of the vulpy web app's attack surface",
+      "severity": "low",
+      "severity_rationale": "FP: HTTP brute-forcer logs attempted credentials \u2014 the logged value is the operator's own wordlist/target data, printing it is the tool's purpose, not an app vulnerability",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "utils/httpbrute.py",
+        "line": 28,
+        "fingerprint": "e844c2c08fe67722:1",
+        "ordinal": 14
+      },
+      "codeql_secsev": "7.5",
+      "real": false,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "utils/httpbrute.py:28 \u2014 standalone offensive/utility CLI script, not part of the vulpy web app's attack surface",
+      "severity": "low",
+      "severity_rationale": "FP: HTTP brute-forcer prints the cracked credential \u2014 the logged value is the operator's own wordlist/target data, printing it is the tool's purpose, not an app vulnerability",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "good/httpbrute.py",
+        "line": 24,
+        "fingerprint": "b55e4ee37ca0d50b:1",
+        "ordinal": 15
+      },
+      "codeql_secsev": "7.5",
+      "real": false,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "good/httpbrute.py:24 \u2014 standalone offensive/utility CLI script, not part of the vulpy web app's attack surface",
+      "severity": "low",
+      "severity_rationale": "FP: HTTP brute-forcer prints the cracked credential \u2014 the logged value is the operator's own wordlist/target data, printing it is the tool's purpose, not an app vulnerability",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/path-injection",
+        "file": "bad/libapi.py",
+        "line": 22,
+        "fingerprint": "6e479c79e8d1316:1",
+        "ordinal": 16
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "path-traversal",
+      "guard": "guarded",
+      "guard_evidence": "bad/mod_api.py:30 \u2014 POST /key; libapi.keygen requires a valid login (libapi.py:10-12)",
+      "severity": "high",
+      "severity_rationale": "user 'username' str.format into a /tmp path then Path.touch + Path.glob(...).unlink (libapi.py:16-22); '../' traverses => create/DELETE arbitrary files; login gate is SQLi-bypassable ([0])",
+      "true_source": "bad/mod_api.py:39 data['username']",
+      "notes": ""
+    }
+  ]
+}
