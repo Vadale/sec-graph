@@ -1,10 +1,11 @@
 # HANDOFF — state for the next session
 
 ## Where we are
-Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 complete. 92 tests green**, quarantine wall
-intact, all reviewed by the `reviewer` agent and simplify-passed. **ROADMAP Phase 4 (the layered
-map + layer-tagger) is fully done.** Dev env `.venv` (`uv pip install -e ".[dev]"`),
-`graphifyy==0.9.6`.
+Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 + Phase 6 (MCP) complete. 101 tests green**,
+quarantine wall intact, all reviewed by the `reviewer` agent and simplify-passed. **ROADMAP Phase 4
+(the layered map + layer-tagger) AND Phase 6 (the MCP triage server) are done** — the whole mission
+pipeline works end-to-end (map + LLM-triage-over-MCP). Dev env `.venv`
+(`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
 
 `secgraph analyze <path>` now produces the **three artifacts + the demo**:
 `graph.json` (graphify's entity graph, coarsely annotated) · `taint.json` (fine, statement-level
@@ -36,19 +37,29 @@ findings with code slices + trace) · `secgraph.html` (self-contained layered ma
   "guarded" — ADR-010). `SinkPoint.guards`/`Finding.guards` accumulate down the call path (`_lift`
   union) and merge by **intersection** on key collision (intra-run + across fixpoint iterations).
   `find_unguarded_sinks` + viz UNGUARDED badge + CLI unguarded count. **Phase 4 is now complete.**
+- **Phase 6 (MCP triage server)**: `secgraph/mcp_view.py` (pure `TaintView`) + `secgraph/mcp_server.py`
+  (thin FastMCP wrapper, lazy SDK import) + `secgraph serve`. Read-only view over the artifacts —
+  never runs the engine/graphify/LLM. Tools: `list_paths`/`get_path_slice`(hash-verified minimal
+  windows)/`find_unguarded_sinks`/`explain_layer`/`get_function_taint` + §15 defensive prompts.
+  `taint.json` gained `id`/`file_hashes`/`source_node`/`sink_node`/absolute `root` (ADR-011).
 
-See `diary/2026-07-19-11-wpc2.md` (WP-C2), `-10-wpc1.md`, `-09-wpb.md`, `-08-wpa.md`, `-06-killgate.md`.
+See `diary/2026-07-19-12-mcp.md` (Phase 6), `-11-wpc2.md`, `-10-wpc1.md`, `-09-wpb.md`, `-06-killgate.md`.
 
 ## Decisions locked
-`DECISIONS.md` ADR-000..010 (008 = structural projection joins; 009 = sensitive-data layers via
-Origin mint; 010 = auth barriers + unguarded sinks, structural + polarity-sound).
+`DECISIONS.md` ADR-000..011 (008 = structural projection joins; 009 = sensitive-data layers via
+Origin mint; 010 = auth barriers + unguarded sinks; 011 = MCP thin-wrapper-over-pure-view).
 
 ## Next session — pick one
-### A. MCP server (Phase 6) — the last core piece of the mission
-`secgraph serve` (currently `NotImplementedError`): expose isolated `taint.json` paths — now
-including `guards` + the `unguarded` flag + layers + slices + trace — to an LLM harness for triage,
-run alongside `graphify --mcp`. Keep the analysis core LLM-free (ADR-000). This closes the
-"hand isolated paths to an LLM over MCP" half of the mission.
+### A. Phase 5 — visualization polish
+The HTML map is functional (layer toggles, railway cards, UNGUARDED badge) but plain. Phase 5 is the
+"Google-Maps" UX pass: better layout/graph rendering, node-level navigation, path highlighting.
+
+### B. Resolver precision — Tier-3 annotation typing (fastapi UNK/TRR mover)
+`def f(u: User)` param-annotation typing raises binding on annotation-saturated DI code
+(fastapi-realworld was UNK 50.8% / TRR 52.7%). Pure analysis, no new deps. Then **H2** field-sensitivity.
+
+### C. Phase 8 — packaging
+Package `rules/` as importlib data; a `pip install`-able wheel; CI publish.
 
 ### C. Resolver/summary precision (lower priority)
 - **Tier-3 annotation typing** (`def f(u: User)`) — the fastapi UNK/TRR mover (deferred; Fable

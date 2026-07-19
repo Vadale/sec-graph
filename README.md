@@ -14,17 +14,43 @@ adds the taint / data-flow engine graphify does not provide. The analysis core i
 
 ## Status
 
-**Pre-alpha — planning complete, implementation not started.** See `ROADMAP.md` for
-the 8-week MVP plan and `PLAN.md` for scope. There is no working functionality yet;
-this README describes the intended tool honestly, not a shipped one.
+**Alpha — the core pipeline works end-to-end.** The deterministic engine is built and
+tested (101 tests): tree-sitter → an intermediate representation → flow-sensitive
+intra- **and** interprocedural taint (cross-file SQLi/command-injection with a trace),
+projected onto graphify's graph plus a self-contained layered HTML map, and an MCP
+triage server. Layers today: **untrusted-input, dangerous-sink, credentials, PII**, and
+the derived **unguarded-sink** finding (a dangerous sink with no auth barrier on the
+path). Analysis is byte-reproducible.
 
-## Planned usage
+Still ahead (see `ROADMAP.md`): visualization polish (Phase 5), resolver precision on
+annotation-heavy code (Tier-3 typing), and packaging as a wheel (Phase 8). Not yet a
+`pip install`-able release.
+
+## Usage
 
 ```
 secgraph analyze <path>   # build the map: graph.json + taint.json + secgraph.html
-secgraph view             # open the interactive layered map
-secgraph serve            # MCP server for LLM triage (run alongside `graphify --mcp`)
+secgraph view             # open the interactive layered map in a browser
+secgraph scan <path>      # print source→sink findings to the terminal
+secgraph serve            # MCP triage server (run alongside `graphify --mcp`)
 ```
+
+## Triage over MCP
+
+`secgraph serve` exposes the *data-flow paths* to an LLM harness (Claude Code, etc.)
+over MCP, handing the model only the **minimal, hash-verified code slice** for a path —
+never the whole repo. Run it **alongside graphify's own server**, which answers the
+entity-level questions (what calls X, shortest path); MCP hosts compose the two natively.
+
+```
+secgraph analyze <path>            # produce the artifacts first
+secgraph serve --out-dir <dir>     # our data-flow tools + triage prompts (stdio)
+graphify --mcp                     # graphify's entity graph tools (separate process)
+```
+
+Tools: `list_paths` (ranked, filter by layer/confidence/file) → `get_path_slice`
+(the token-frugal payload) · `find_unguarded_sinks` · `explain_layer` ·
+`get_function_taint`. Canned defensive triage prompts ship with the server.
 
 ## License
 

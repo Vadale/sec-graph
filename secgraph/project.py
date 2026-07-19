@@ -15,6 +15,7 @@ containment (tightest wins, so nested defs land on the inner node).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -31,6 +32,15 @@ def _read_slice(root: Path, rel_file: str, line: int) -> str:
     return lines[line - 1].strip() if 1 <= line <= len(lines) else ""
 
 
+def _file_hash(root: Path, rel_file: str) -> str:
+    """sha256 of a file's bytes, stored so the MCP ``get_path_slice`` can flag a slice as stale
+    when the file drifted since analysis (ROADMAP §8.2)."""
+    try:
+        return "sha256:" + hashlib.sha256((root / rel_file).read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
 def _finding_dict(f: Finding, root: Path) -> dict:
     sink_file = f.sink_file or f.source_file
     return {
@@ -43,6 +53,7 @@ def _finding_dict(f: Finding, root: Path) -> dict:
         "guards": list(f.guards), "unguarded": not f.guards,   # unguarded = no auth barrier on the path
         "source_slice": _read_slice(root, f.source_file, f.source_line),
         "sink_slice": _read_slice(root, sink_file, f.sink_line),
+        "file_hashes": {rel: _file_hash(root, rel) for rel in dict.fromkeys([f.source_file, sink_file])},
     }
 
 
@@ -60,7 +71,9 @@ def _enclosing_node(
 
 def _annotate_graph_json(
     graph_json: Path, findings: list[Finding], modules: list[ModuleIR]
-) -> None:
+) -> list[tuple[str | None, str | None]]:
+    """Annotate graph.json in place; return each finding's ``(source_node_id, sink_node_id)`` so
+    taint.json can carry the sound node binding (used by the MCP ``get_function_taint``)."""
     data = json.loads(graph_json.read_text(encoding="utf-8"))
     nodes = data.get("nodes", [])
     n_before = len(nodes)
@@ -75,9 +88,12 @@ def _annotate_graph_json(
                     (fn.span.start_line, fn.span.end_line, fn.graphify_node))
 
     hyperedges = data.setdefault("hyperedges", [])
+    node_pairs: list[tuple[str | None, str | None]] = []
     for i, f in enumerate(findings):
         src = node_by_id.get(_enclosing_node(by_file, f.source_file, f.source_line))
         sink = node_by_id.get(_enclosing_node(by_file, f.sink_file or f.source_file, f.sink_line))
+        node_pairs.append((src["id"] if src is not None else None,
+                           sink["id"] if sink is not None else None))
         for node in (src, sink):
             if node is not None:
                 node["sec_layers"] = sorted(set(node.get("sec_layers", [])) | set(f.layers))
@@ -91,6 +107,7 @@ def _annotate_graph_json(
 
     assert len(data.get("nodes", [])) == n_before, "projection changed graph.json node count"
     graph_json.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    return node_pairs
 
 
 def analyze_project(path: Path | str, out_dir: Path | str = "graphify-out") -> dict:
@@ -109,12 +126,18 @@ def analyze_project(path: Path | str, out_dir: Path | str = "graphify-out") -> d
     modules = build_project_ir(path)
     findings = run_project(modules, rules)
     result = graphify_adapter.run_graphify(path, out_dir)     # writes out_dir/graph.json
-    _annotate_graph_json(result.graph_json, findings, modules)
+    node_pairs = _annotate_graph_json(result.graph_json, findings, modules)
 
-    finding_dicts = [_finding_dict(f, path) for f in findings]
+    finding_dicts = [
+        {"id": f"path-{i:04d}", **_finding_dict(f, path),
+         "source_node": node_pairs[i][0], "sink_node": node_pairs[i][1]}
+        for i, f in enumerate(findings)
+    ]
     taint_json = out_dir / "taint.json"
     taint_json.write_text(
-        json.dumps({"version": 1, "root": str(path), "findings": finding_dicts},
+        # absolute root so `secgraph serve` reads slices correctly regardless of its cwd
+        # (taint.json is a gitignored local artifact, so a machine path is fine)
+        json.dumps({"version": 1, "root": str(path.resolve()), "findings": finding_dicts},
                    indent=2, ensure_ascii=False),
         encoding="utf-8",
     )

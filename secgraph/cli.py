@@ -90,9 +90,19 @@ def view(out_dir: str = "graphify-out") -> None:
 
 
 @app.command()
-def serve() -> None:
-    """Start the MCP server for LLM triage (run alongside `graphify --mcp`)."""
-    raise NotImplementedError("ROADMAP.md Phase 6")
+def serve(out_dir: str = "graphify-out") -> None:
+    """Start the MCP server (stdio) exposing taint paths for LLM triage. Run `secgraph analyze`
+    first; run this alongside `graphify --mcp`."""
+    from pathlib import Path
+
+    taint = Path(out_dir) / "taint.json"
+    if not taint.exists():
+        typer.secho(f"error: {taint} not found - run `secgraph analyze <path>` first",
+                    fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    from secgraph.mcp_server import build_server
+
+    build_server(out_dir).run()
 
 
 if __name__ == "__main__":

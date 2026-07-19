@@ -223,3 +223,34 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
 - **Rejected:** first-match/substring auth detection (the compound-boolean FN); CFG statement
   dominators (the structural IR walk is simpler and sufficient); storing `unguarded` (derive it, so
   it can't drift from `guards`).
+
+## ADR-011 — MCP server is a thin wrapper over a pure read-only view
+- 2026-07-19 · Accepted (WP Phase 6; reviewer-hardened)
+- **Context:** ROADMAP §13/§15 — expose the deterministic analysis (`taint.json` + `graph.json`)
+  to an external LLM harness over MCP for token-frugal triage ("coarse discovery → precise
+  slicing"). The mission requires the analysis core to stay LLM-free (ADR-000).
+- **Decision (architecture):** the tool logic lives in a pure, graphify-free, SDK-free
+  `secgraph/mcp_view.py` (`TaintView`) — unit-testable on its own; `secgraph/mcp_server.py` is only
+  a thin `FastMCP` wrapper (the `mcp` SDK import is **lazy**, inside `build_server`, so `scan`/
+  `analyze`/`--help` never pay it). The server is **read-only**: it never runs the taint engine,
+  graphify, or an LLM — the analysis is already done. `secgraph serve <out_dir>` runs it over stdio.
+- **Decision (taint.json carries what the tools need):** each finding gains `id` (`path-NNNN`),
+  `file_hashes` (sha256 per involved file, so `get_path_slice` flags a **stale** window when the
+  file drifted since analysis — §8.2), `source_node`/`sink_node` (the graphify node ids from the
+  projection's (file, def-line) span join), and the artifact's `root` is stored **absolute** (so
+  `serve` reads slices regardless of its cwd; taint.json is a gitignored local artifact, so a
+  machine path is fine).
+- **Decision (`get_function_taint` binds by node id, not name):** it matches findings by the stamped
+  `source_node`/`sink_node`, not by the node's label — graphify labels a method `.get()` while the
+  finding names it `get`, so a name match returned empty for every method/constructor (reviewer HIGH
+  FN). This reuses ADR-008's structural join and also fixes same-name collisions.
+- **Decision (`get_path_slice` = source+sink windows for the MVP):** the trace carries function
+  names, not per-hop line numbers, so the minimal payload is the hash-verified source + sink code
+  windows (the token-efficiency win — a few lines, not whole files). Per-hop intermediate windows
+  are deferred (need hop locations stored on the finding).
+- **Composition:** entity-level questions ("what calls X", shortest path) stay with
+  `graphify --mcp`; data-flow paths are ours. Documented as **run both** (README). Defensive triage
+  prompts (§15, CONFIRMED-vs-PLAUSIBLE discipline) shipped as MCP prompts.
+- **Rejected:** putting tool logic directly in the FastMCP handlers (untestable without the SDK,
+  couples logic to transport); a name match for `get_function_taint` (the method FN); a
+  cwd-relative `root` (breaks slicing when the harness launches `serve` from elsewhere).
