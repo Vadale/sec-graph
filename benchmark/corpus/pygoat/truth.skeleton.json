@@ -1,0 +1,649 @@
+{
+  "repo": "pygoat",
+  "commit": "HEAD",
+  "sarif_sha256": "sha256:7e8723f78ca4f8a885507eb78c3424cdb369fc326de8dfef81f3d385d9a7b859",
+  "labeller": "claude-drafted-blind; maintainer-verified",
+  "process": "PROTOCOL.md#2",
+  "findings": [
+    {
+      "key": {
+        "rule_id": "py/code-injection",
+        "file": "introduction/mitre.py",
+        "line": 218,
+        "fingerprint": "6b0c238838fc829e:1",
+        "ordinal": 0
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/code-injection",
+        "file": "introduction/views.py",
+        "line": 460,
+        "fingerprint": "28b00e2a4bc7115e:1",
+        "ordinal": 1
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/mitre.py",
+        "line": 161,
+        "fingerprint": "88c708a4e56347de:1",
+        "ordinal": 2
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/utility.py",
+        "line": 59,
+        "fingerprint": "fb8d26946a31581c:1",
+        "ordinal": 3
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/views.py",
+        "line": 1026,
+        "fingerprint": "9016d9299e7d2389:1",
+        "ordinal": 4
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/views.py",
+        "line": 1194,
+        "fingerprint": "3fecbc94bb3f6862:1",
+        "ordinal": 5
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/full-ssrf",
+        "file": "introduction/views.py",
+        "line": 963,
+        "fingerprint": "3ab50057f03fbcd3:1",
+        "ordinal": 6
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/insecure-cookie",
+        "file": "introduction/views.py",
+        "line": 291,
+        "fingerprint": "c22ab881d455f506:1",
+        "ordinal": 7
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/insecure-cookie",
+        "file": "introduction/views.py",
+        "line": 305,
+        "fingerprint": "c22ab7ecde045c6d:1",
+        "ordinal": 8
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/insecure-cookie",
+        "file": "introduction/views.py",
+        "line": 319,
+        "fingerprint": "c22ab7ecde045c6d:2",
+        "ordinal": 9
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "introduction/views.py",
+        "line": 162,
+        "fingerprint": "3efd6832e5326916:1",
+        "ordinal": 10
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "introduction/views.py",
+        "line": 878,
+        "fingerprint": "858a7e6ceaf8454e:1",
+        "ordinal": 11
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/cookie-injection",
+        "file": "dockerized_labs/broken_auth_lab/app.py",
+        "line": 49,
+        "fingerprint": "bf0a226451c305ca:1",
+        "ordinal": 12
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/cookie-injection",
+        "file": "dockerized_labs/broken_auth_lab/app.py",
+        "line": 51,
+        "fingerprint": "a74167006e1f3f19:1",
+        "ordinal": 13
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "dockerized_labs/broken_auth_lab/app.py",
+        "line": 123,
+        "fingerprint": "9c22980cf6d98d18:1",
+        "ordinal": 14
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/xml-bomb",
+        "file": "introduction/views.py",
+        "line": 260,
+        "fingerprint": "73ec937b56aa4bdd:1",
+        "ordinal": 15
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-storage-sensitive-data",
+        "file": "introduction/playground/A9/archive.py",
+        "line": 49,
+        "fingerprint": "669244316a57f7f1:1",
+        "ordinal": 16
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 159,
+        "fingerprint": "949eab12a3a80d29:1",
+        "ordinal": 17
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 314,
+        "fingerprint": "383804d2366e1f35:1",
+        "ordinal": 18
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 755,
+        "fingerprint": "237ffbf0757cd2f:1",
+        "ordinal": 19
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 861,
+        "fingerprint": "88a551cb43b5990f:1",
+        "ordinal": 20
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 875,
+        "fingerprint": "15f7d82636eb0bed:1",
+        "ordinal": 21
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/unsafe-deserialization",
+        "file": "dockerized_labs/insec_des_lab/main.py",
+        "line": 36,
+        "fingerprint": "71a4942175c424e4:1",
+        "ordinal": 22
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/unsafe-deserialization",
+        "file": "introduction/views.py",
+        "line": 214,
+        "fingerprint": "1e99b81d229ec99d:1",
+        "ordinal": 23
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/unsafe-deserialization",
+        "file": "introduction/views.py",
+        "line": 560,
+        "fingerprint": "a7ea016977244140:1",
+        "ordinal": 24
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/client-exposed-cookie",
+        "file": "introduction/views.py",
+        "line": 291,
+        "fingerprint": "c22ab881d455f506:1",
+        "ordinal": 25
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/client-exposed-cookie",
+        "file": "introduction/views.py",
+        "line": 305,
+        "fingerprint": "c22ab7ecde045c6d:1",
+        "ordinal": 26
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/client-exposed-cookie",
+        "file": "introduction/views.py",
+        "line": 319,
+        "fingerprint": "c22ab7ecde045c6d:2",
+        "ordinal": 27
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/path-injection",
+        "file": "introduction/playground/ssrf/main.py",
+        "line": 8,
+        "fingerprint": "6eeabe81b4e8b6ca:1",
+        "ordinal": 28
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/path-injection",
+        "file": "introduction/views.py",
+        "line": 927,
+        "fingerprint": "e2256906cb98c128:1",
+        "ordinal": 29
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/xxe",
+        "file": "introduction/views.py",
+        "line": 260,
+        "fingerprint": "73ec937b56aa4bdd:1",
+        "ordinal": 30
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/command-line-injection",
+        "file": "introduction/mitre.py",
+        "line": 233,
+        "fingerprint": "5adf051748e71578:1",
+        "ordinal": 31
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/command-line-injection",
+        "file": "introduction/views.py",
+        "line": 431,
+        "fingerprint": "4fbe055c4c255e31:1",
+        "ordinal": 32
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 654,
+        "fingerprint": "4391af9ab416e779:1",
+        "ordinal": 33
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 668,
+        "fingerprint": "e4b7c2297e02a894:1",
+        "ordinal": 34
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 669,
+        "fingerprint": "cb42bef37db30813:1",
+        "ordinal": 35
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 672,
+        "fingerprint": "1d370b249622cc12:1",
+        "ordinal": 36
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/shell-command-constructed-from-input",
+        "file": "introduction/mitre.py",
+        "line": 241,
+        "fingerprint": "d7100a6e52f51577:1",
+        "ordinal": 37
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/shell-command-constructed-from-input",
+        "file": "introduction/views.py",
+        "line": 424,
+        "fingerprint": "7b9836cdfc86f18c:1",
+        "ordinal": 38
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/shell-command-constructed-from-input",
+        "file": "introduction/views.py",
+        "line": 426,
+        "fingerprint": "b91055a80374eac8:1",
+        "ordinal": 39
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    }
+  ]
+}

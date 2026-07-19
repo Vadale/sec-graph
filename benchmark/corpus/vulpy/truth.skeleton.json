@@ -1,0 +1,281 @@
+{
+  "repo": "vulpy",
+  "commit": "5249cc8",
+  "sarif_sha256": "sha256:097335e65b42b1f324f79b021892a67e46e2e901714b8b383fda7a1f5b3af05b",
+  "labeller": "claude-drafted-blind; maintainer-verified",
+  "process": "PROTOCOL.md#2",
+  "findings": [
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "bad/libuser.py",
+        "line": 12,
+        "fingerprint": "87f19d40ee7aefaf:1",
+        "ordinal": 0
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "bad/libuser.py",
+        "line": 25,
+        "fingerprint": "dca96e071a47ec37:1",
+        "ordinal": 1
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "bad/libuser.py",
+        "line": 53,
+        "fingerprint": "baab2915c71ea6b1:1",
+        "ordinal": 2
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/cookie-injection",
+        "file": "bad/libsession.py",
+        "line": 7,
+        "fingerprint": "3888b82276d24dfe:1",
+        "ordinal": 3
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "good/vulpy-ssl.py",
+        "line": 29,
+        "fingerprint": "b0c28a6e08dc0c46:1",
+        "ordinal": 4
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "bad/vulpy-ssl.py",
+        "line": 29,
+        "fingerprint": "b0c28a6e08dc0c46:1",
+        "ordinal": 5
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "good/vulpy.py",
+        "line": 53,
+        "fingerprint": "92d0ce9893394f28:1",
+        "ordinal": 6
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "bad/vulpy.py",
+        "line": 55,
+        "fingerprint": "acec19fa0fda9f4d:1",
+        "ordinal": 7
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-storage-sensitive-data",
+        "file": "bad/api_post.py",
+        "line": 27,
+        "fingerprint": "7bddd08d3c2aa99:1",
+        "ordinal": 8
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "bad/api_post.py",
+        "line": 24,
+        "fingerprint": "638ee9236888f142:1",
+        "ordinal": 9
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "bad/brute.py",
+        "line": 23,
+        "fingerprint": "acb1e247937cdbaf:1",
+        "ordinal": 10
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "utils/crack-cvv.py",
+        "line": 17,
+        "fingerprint": "c2b3cbedb39d7d9b:1",
+        "ordinal": 11
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "good/cutpasswd.py",
+        "line": 20,
+        "fingerprint": "928ad1ec23ad485c:1",
+        "ordinal": 12
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "utils/httpbrute.py",
+        "line": 26,
+        "fingerprint": "4f3443320e021643:1",
+        "ordinal": 13
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "utils/httpbrute.py",
+        "line": 28,
+        "fingerprint": "e844c2c08fe67722:1",
+        "ordinal": 14
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "good/httpbrute.py",
+        "line": 24,
+        "fingerprint": "b55e4ee37ca0d50b:1",
+        "ordinal": 15
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/path-injection",
+        "file": "bad/libapi.py",
+        "line": 22,
+        "fingerprint": "6e479c79e8d1316:1",
+        "ordinal": 16
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    }
+  ]
+}

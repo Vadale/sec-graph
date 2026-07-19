@@ -1,0 +1,153 @@
+{
+  "repo": "vulnerable-flask-app",
+  "commit": "b6a4f97",
+  "sarif_sha256": "sha256:f58ed69ec2197cad6b1a1c368f6048ad0a90143db0836af14cdf788c271758f3",
+  "labeller": "claude-drafted-blind; maintainer-verified",
+  "process": "PROTOCOL.md#2",
+  "findings": [
+    {
+      "key": {
+        "rule_id": "py/stack-trace-exposure",
+        "file": "app/app.py",
+        "line": 281,
+        "fingerprint": "e4524d76c65d89e4:1",
+        "ordinal": 0
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "app/app.py",
+        "line": 141,
+        "fingerprint": "ff1bb438c583be1a:1",
+        "ordinal": 1
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "app/app.py",
+        "line": 265,
+        "fingerprint": "9b579599cfd59a08:1",
+        "ordinal": 2
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/template-injection",
+        "file": "app/app.py",
+        "line": 114,
+        "fingerprint": "7dd2e47f71984ab7:1",
+        "ordinal": 3
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/reflective-xss",
+        "file": "app/app.py",
+        "line": 185,
+        "fingerprint": "53c831f97e47d623:1",
+        "ordinal": 4
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 17,
+        "fingerprint": "3c89d445d9537ce9:1",
+        "ordinal": 5
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 28,
+        "fingerprint": "93175e6969418e30:1",
+        "ordinal": 6
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 36,
+        "fingerprint": "212372714d55d580:1",
+        "ordinal": 7
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 44,
+        "fingerprint": "effbe8dac176b3a1:1",
+        "ordinal": 8
+      },
+      "real": null,
+      "vuln_class": null,
+      "guard": null,
+      "guard_evidence": "",
+      "severity": null,
+      "severity_rationale": "",
+      "notes": ""
+    }
+  ]
+}
