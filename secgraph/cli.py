@@ -10,21 +10,19 @@ app = typer.Typer(
 
 @app.command()
 def analyze(path: str, out_dir: str = "graphify-out") -> None:
-    """Analyze PATH: build graph.json (taint.json + secgraph.html come later)."""
-    # Lazy import so `view`/`serve`/`--help` never pay graphify's import cost, and so
-    # the quarantine wall stays put: the CLI imports the adapter, never graphify.
-    from secgraph import graphify_adapter
+    """Analyze PATH: graph.json (annotated) + taint.json + secgraph.html."""
+    # Lazy import so `scan`/`view`/`--help` never pay graphify's import cost.
+    from secgraph.project import analyze_project
 
     try:
-        result = graphify_adapter.run_graphify(path, out_dir)
+        r = analyze_project(path, out_dir)
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         typer.secho(f"error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(
-        f"Wrote {result.graph_json} "
-        f"({result.n_nodes} nodes, {result.n_edges} edges, {result.n_calls} calls)"
-    )
+    typer.echo(f"Wrote {r['graph_json']}")
+    typer.echo(f"      {r['taint_json']}")
+    typer.echo(f"      {r['html']}   ({r['findings']} finding(s))")
 
 
 @app.command()
@@ -77,9 +75,18 @@ def callgraph_stats(path: str) -> None:
 
 
 @app.command()
-def view() -> None:
-    """Open the interactive layered map (secgraph.html)."""
-    raise NotImplementedError("ROADMAP.md Phase 5")
+def view(out_dir: str = "graphify-out") -> None:
+    """Open the interactive layered map (secgraph.html) in a browser."""
+    import webbrowser
+    from pathlib import Path
+
+    html = Path(out_dir) / "secgraph.html"
+    if not html.exists():
+        typer.secho(f"error: {html} not found - run `secgraph analyze <path>` first",
+                    fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    webbrowser.open(html.resolve().as_uri())
+    typer.echo(f"Opened {html}")
 
 
 @app.command()

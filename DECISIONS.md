@@ -121,3 +121,27 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
   is the entity graph + artifact/viz/MCP substrate + validation skeleton, never per-site binding.
 - **Rejected:** keeping the single all-sites rate (meaningless on ORM code, gameable);
   declaring the thesis dead on the mis-specified number.
+
+## ADR-008 — Projection joins structurally; viz payload is script-data-safe
+- 2026-07-19 · Accepted (Phase 4 / WP-B; reviewer-driven)
+- **Context:** the first `_annotate_graph_json` mapped findings to graphify nodes by function
+  **name** (`(source_file, function)`). graphify labels a method `.get()` (leading dot) while the
+  IR names it `get`, and two classes in one file can both host a `get`, so the name join silently
+  annotated **nothing for methods** and overwrote same-name nodes — the graphify/MCP-facing half
+  of the projection (`sec_layers` + hyperedges) was empty for most real Python.
+- **Decision:** projection annotation uses **structural joins only**, reusing ADR-002's
+  `(source_file, def-line)` join (`ir.join.join_modules` binds `FunctionIR.graphify_node`); a
+  finding's statement line is mapped to its enclosing function by **tightest span containment**
+  (`_enclosing_node`). **Function-name joins are banned** for node mapping. graphify's node **ids**
+  are still never recomputed (ADR-002 / pitfall #9) — only its `(file, def-line)` key is matched.
+- **Decision (viz):** `render_html` embeds findings as JSON with every `<` escaped to `<`.
+  `<` occurs only inside JSON string values, so this stays valid JSON that parses back to `<`,
+  and with no literal `<` the HTML tokenizer cannot leave script-data state — a code slice
+  containing `</script>` / `<!--<script>` can neither break out (XSS) nor silently swallow the
+  following `<script>` block (blank-report self-DoS). Insertion into the DOM stays `textContent`.
+- **Why:** methods/ORM models/views are where sensitive flows live; a name join made the layered
+  map lie by omission. Span-containment is collision-proof and needs no new `Finding` fields.
+- **Rejected:** threading graphify node ids onto `Finding` at taint time (the cross-file sink
+  node isn't available there); qualifying names with the class (still collides on overloads and
+  couples to graphify's `.method()` labelling); the narrower `</` → `<\/` viz guard (secure but
+  not robust — leaves `<!--<script>` able to blank the report).
