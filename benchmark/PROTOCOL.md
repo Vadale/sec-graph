@@ -50,13 +50,31 @@ Keyed on **SARIF identity** (`rule_id`, `file`, `line`, `fingerprint`, `ordinal`
 ids (truth must be definable without ever running sec-graph). Per finding:
 
 - `real`: `true|false` — is this a genuinely exploitable/valid issue?
-- `vuln_class`: one of the 15-item output taxonomy (§3).
+- `vuln_class`: one of the output taxonomy (§3).
 - `guard`: `guarded | unguarded | n/a` **with a mandatory `guard_evidence` code citation** (`file:line — why`).
 - `severity`: `low|medium|high|critical` per the rubric below, with a one-line `severity_rationale`.
+- `codeql_secsev`: CodeQL's `security-severity` for the rule (logged so every downgrade is auditable).
+- `true_source`: the real taint source line when CodeQL's flow source is imprecise (e.g. `app.py:1 ImportMember`).
 
 **Severity rubric:** `critical` = pre-auth RCE / deserialization / SQLi; `high` = injection or
 sensitive-data exposure reachable past weak/no auth; `medium` = authenticated-only or constrained
 primitive; `low` = hygiene (e.g. weak hash of non-secret, missing cookie flag with no session impact).
+
+**Labelling conventions (locked after the VFA calibration + Fable 5 max label audit — apply corpus-wide):**
+- **Weak/forgeable auth ⇒ severity, not guard.** `guard` records the *presence* of a gate in route code
+  (structural, reproducible), **never its strength**. If the verifier's secret/key is hardcoded, guessable
+  or public (grep for it), treat the finding as **de-facto pre-auth** for severity while keeping
+  `guard=guarded`; both evidence fields cite the secret's line. (E.g. VFA `/search` SQLi: `guard=guarded`
+  but `severity=critical` because the JWT key is the literal `'secret'`.)
+- **FP rationales must be code-mechanical** (inert parameter, content-type, non-HTML / unreachable sink,
+  no-TLS target) — never a category excuse ("test code") standing alone. **Verify sanitizer claims against
+  real library behaviour** (e.g. `json.dumps` does *not* HTML-escape; name the actual neutralizer).
+- **Justify every downgrade from `codeql_secsev`** on exploitability grounds — systematic downgrading is a
+  prime hostile target.
+- **Check runtime-reachability hedges** (Py3 bytes/str, broken constructors, dead `except`) before
+  asserting `real:true`; label the class real by intent but record the hedge in `notes`.
+- **Flag multi-class sinks** so severity isn't understated by the rule's narrow class.
+- The §2 second pass re-examines **every FP and every `codeql_secsev`-divergent severity** specifically.
 
 **Labelling procedure (anti-circularity is procedural):**
 1. `skeleton.py` emits a truth **skeleton** from the SARIF (keys only, empty labels) — keys are never
@@ -82,9 +100,17 @@ and taxonomy, the **same finding set** (every SARIF result), one call per findin
 **Output schema (forced JSON, both arms):**
 `{"vuln_class": <taxonomy>, "verdict": "real|false-positive|unsure", "auth_guarded": "yes|no|unknown", "severity": "low|medium|high|critical", "reason": "<=18 words"}`
 
-Taxonomy (15): `sql-injection, command-injection, path-traversal, deserialization, xss, ssrf,
-open-redirect, cleartext-storage-or-logging, weak-hashing-or-crypto, log-injection, insecure-cookie,
-xml-external-entity-or-bomb, code-injection, csrf, none`.
+Taxonomy (18 classes + `none`): `sql-injection, command-injection, code-injection, path-traversal,
+deserialization, xss, ssrf, open-redirect, cleartext-storage-or-logging, weak-hashing-or-crypto,
+log-injection, insecure-cookie, cookie-injection, xml-external-entity-or-bomb, csrf,
+missing-cert-validation, debug-mode, info-exposure, none`.
+
+*Pre-run refinement (documented): Fable's initial 15-item list was expanded — before any arm run — to
+cover the classes CodeQL actually emits on the corpus (21 distinct rules). Added: `cookie-injection`
+(distinct from `insecure-cookie`; near-miss pair), `missing-cert-validation` (py/request-without-cert-
+validation), `debug-mode` (py/flask-debug), `info-exposure` (py/stack-trace-exposure). Rule→class map
+lives in `score.py`. `class_acc` is scored over `real:true` findings only (an FP's technical class is
+recorded but not scored).*
 
 - **Arm A — control (steelman).** Evidence = rendered SARIF fields (ruleId, rule short/full description,
   severity + security-severity, message, primary `file:line`, the ordered `codeFlows` steps) **+ the full

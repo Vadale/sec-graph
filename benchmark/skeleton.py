@@ -22,19 +22,23 @@ def main(sarif_path: str, repo: str, commit: str) -> None:
     sha = "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest()
     findings = []
     for run in d.get("runs", []):
+        secsev = {rule["id"]: (rule.get("properties") or {}).get("security-severity")
+                  for rule in run.get("tool", {}).get("driver", {}).get("rules", [])}
         for i, r in enumerate(run.get("results", [])):
             f, line = _loc(r)
             fp = (r.get("partialFingerprints") or {}).get("primaryLocationLineHash", "")
             findings.append({
                 "key": {"rule_id": r.get("ruleId"), "file": f, "line": line,
                         "fingerprint": fp, "ordinal": i},
+                "codeql_secsev": secsev.get(r.get("ruleId")),   # CodeQL's security-severity (audit downgrades)
                 # labels — filled by the (blind) labeller, verified by the maintainer:
                 "real": None,                # true | false
-                "vuln_class": None,          # one of the 15-item taxonomy (see PROTOCOL §3)
-                "guard": None,               # guarded | unguarded | n/a
+                "vuln_class": None,          # one of the taxonomy (see PROTOCOL §3)
+                "guard": None,               # guarded | unguarded | n/a  (presence of a gate, not its strength)
                 "guard_evidence": "",        # MANDATORY code citation "file:line — why"
                 "severity": None,            # low | medium | high | critical
                 "severity_rationale": "",
+                "true_source": "",           # real source line if CodeQL's is imprecise
                 "notes": "",
             })
     out = {"repo": repo, "commit": commit, "sarif_sha256": sha,

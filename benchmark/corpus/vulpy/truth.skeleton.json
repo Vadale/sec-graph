@@ -13,12 +13,14 @@
         "fingerprint": "87f19d40ee7aefaf:1",
         "ordinal": 0
       },
+      "codeql_secsev": "8.8",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -29,12 +31,14 @@
         "fingerprint": "dca96e071a47ec37:1",
         "ordinal": 1
       },
+      "codeql_secsev": "8.8",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -45,12 +49,14 @@
         "fingerprint": "baab2915c71ea6b1:1",
         "ordinal": 2
       },
+      "codeql_secsev": "8.8",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -61,12 +67,14 @@
         "fingerprint": "3888b82276d24dfe:1",
         "ordinal": 3
       },
+      "codeql_secsev": "5.0",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -77,12 +85,14 @@
         "fingerprint": "b0c28a6e08dc0c46:1",
         "ordinal": 4
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -93,12 +103,14 @@
         "fingerprint": "b0c28a6e08dc0c46:1",
         "ordinal": 5
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -109,12 +121,14 @@
         "fingerprint": "92d0ce9893394f28:1",
         "ordinal": 6
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -125,12 +139,14 @@
         "fingerprint": "acec19fa0fda9f4d:1",
         "ordinal": 7
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -141,12 +157,14 @@
         "fingerprint": "7bddd08d3c2aa99:1",
         "ordinal": 8
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -157,12 +175,14 @@
         "fingerprint": "638ee9236888f142:1",
         "ordinal": 9
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -173,12 +193,14 @@
         "fingerprint": "acb1e247937cdbaf:1",
         "ordinal": 10
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -189,12 +211,14 @@
         "fingerprint": "c2b3cbedb39d7d9b:1",
         "ordinal": 11
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -205,12 +229,14 @@
         "fingerprint": "928ad1ec23ad485c:1",
         "ordinal": 12
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -221,12 +247,14 @@
         "fingerprint": "4f3443320e021643:1",
         "ordinal": 13
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -237,12 +265,14 @@
         "fingerprint": "e844c2c08fe67722:1",
         "ordinal": 14
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -253,12 +283,14 @@
         "fingerprint": "b55e4ee37ca0d50b:1",
         "ordinal": 15
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     },
     {
@@ -269,12 +301,14 @@
         "fingerprint": "6e479c79e8d1316:1",
         "ordinal": 16
       },
+      "codeql_secsev": "7.5",
       "real": null,
       "vuln_class": null,
       "guard": null,
       "guard_evidence": "",
       "severity": null,
       "severity_rationale": "",
+      "true_source": "",
       "notes": ""
     }
   ]

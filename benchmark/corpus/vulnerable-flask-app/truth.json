@@ -1,0 +1,165 @@
+{
+  "repo": "vulnerable-flask-app",
+  "commit": "b6a4f97",
+  "sarif_sha256": "sha256:f58ed69ec2197cad6b1a1c368f6048ad0a90143db0836af14cdf788c271758f3",
+  "labeller": "claude-drafted-blind; maintainer-verified",
+  "process": "PROTOCOL.md#2",
+  "findings": [
+    {
+      "key": {
+        "rule_id": "py/stack-trace-exposure",
+        "file": "app/app.py",
+        "line": 281,
+        "fingerprint": "e4524d76c65d89e4:1",
+        "ordinal": 0
+      },
+      "real": true,
+      "vuln_class": "info-exposure",
+      "guard": "guarded",
+      "guard_evidence": "app/app.py:248-253 \u2014 /search gates on Authorization + verify_jwt(); NOTE the JWT key is hardcoded 'secret' (app.py:26,86) so the gate is cryptographically void",
+      "severity": "low",
+      "severity_rationale": "stack/SQL-exception detail rendered to client; low rests on the info-exposure class ceiling, not the (void) auth barrier; medium arguable (leaked SQL error aids the co-located SQLi, de-facto unauthenticated)",
+      "notes": "co-located 2nd-order SSTI: str(e) %-formatted into render_template_string (app.py:280-281), same pattern as [3]",
+      "codeql_secsev": "5.4"
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "app/app.py",
+        "line": 141,
+        "fingerprint": "ff1bb438c583be1a:1",
+        "ordinal": 1
+      },
+      "real": true,
+      "vuln_class": "weak-hashing-or-crypto",
+      "guard": "unguarded",
+      "guard_evidence": "app/app.py:134 \u2014 @app.route('/register/user') has no auth decorator/check (public registration)",
+      "severity": "medium",
+      "severity_rationale": "MD5 used for password hashing (fast, brute-forceable); unauthenticated; weakens every stored password",
+      "notes": "hashlib.md5(password) app.py:141. HEDGE: Py3 hashlib.md5(str) raises TypeError and User(username,hash_pass) uses a positional ctor db.Model doesn't define (app.py:33-36) -> route may 500 before storing; labelled real by crypto-choice intent",
+      "codeql_secsev": "7.5"
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "app/app.py",
+        "line": 265,
+        "fingerprint": "9b579599cfd59a08:1",
+        "ordinal": 2
+      },
+      "real": true,
+      "vuln_class": "sql-injection",
+      "guard": "guarded",
+      "guard_evidence": "app/app.py:248-253 \u2014 /search gates on verify_jwt(); BUT the JWT key is hardcoded 'secret' (app.py:26,86) -> token forgeable in ~3 lines of PyJWT -> gate present but cryptographically void",
+      "severity": "critical",
+      "severity_rationale": "user search_term %-formatted into SQL then db.engine.execute (app.py:261,265); forgeable JWT => de-facto PRE-AUTH SQLi => rubric 'pre-auth SQLi = critical' (specific beats 'past weak auth -> high'); no separate finding captures the secret, so severity is the only place it enters",
+      "notes": "str_query app.py:261, execute app.py:265; CodeQL src app.py:1 is imprecise (true source request.json app.py:259)",
+      "codeql_secsev": "8.8",
+      "true_source": "app/app.py:259 content['search'] (CodeQL src app.py:1 ImportMember is imprecise)"
+    },
+    {
+      "key": {
+        "rule_id": "py/template-injection",
+        "file": "app/app.py",
+        "line": 114,
+        "fingerprint": "7dd2e47f71984ab7:1",
+        "ordinal": 3
+      },
+      "real": true,
+      "vuln_class": "code-injection",
+      "guard": "unguarded",
+      "guard_evidence": "app/app.py:101 \u2014 @app.errorhandler(404), reached on ANY 404 with no auth",
+      "severity": "critical",
+      "severity_rationale": "request.url %-formatted into a Jinja template then render_template_string (app.py:112-114) -> SSTI/RCE; unauthenticated: GET /x?y={{7*7}} -> 404 -> RCE via the query string (path-normalization-proof)",
+      "notes": "render params dir/help/locals are RCE gadgets",
+      "codeql_secsev": "9.3",
+      "true_source": "app/app.py:112 request.url"
+    },
+    {
+      "key": {
+        "rule_id": "py/reflective-xss",
+        "file": "app/app.py",
+        "line": 185,
+        "fingerprint": "53c831f97e47d623:1",
+        "ordinal": 4
+      },
+      "real": false,
+      "vuln_class": "xss",
+      "guard": "unguarded",
+      "guard_evidence": "app/app.py:170 \u2014 /login is the public auth endpoint",
+      "severity": "low",
+      "severity_rationale": "FP: not exploitable as reflected XSS",
+      "notes": "FP basis (corrected): (1) resp.mimetype='application/json' app.py:189 -> browser won't parse as HTML; (2) /login is POST-only app.py:170 -> not navigable; (3) username reaches no text/html sink anywhere. NOTE json.dumps does NOT HTML-escape (only \",\\,ctrl) -> it is NOT the neutralizer",
+      "codeql_secsev": "7.8",
+      "true_source": "app/app.py:180 content['username']"
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 17,
+        "fingerprint": "3c89d445d9537ce9:1",
+        "ordinal": 5
+      },
+      "real": false,
+      "vuln_class": "missing-cert-validation",
+      "guard": "n/a",
+      "guard_evidence": "tests/e2e_zap.py \u2014 test harness script, not a web route (n/a)",
+      "severity": "low",
+      "severity_rationale": "FP: verify=False affects only HTTPS cert validation, but every call targets http://localhost:5050 via an http:// ZAP proxy (e2e_zap.py:9-13) -> no TLS handshake -> the flag is inert (zero security effect); test-harness/non-production is secondary",
+      "notes": "CodeQL precision:medium supports the FP",
+      "codeql_secsev": "7.5"
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 28,
+        "fingerprint": "93175e6969418e30:1",
+        "ordinal": 6
+      },
+      "real": false,
+      "vuln_class": "missing-cert-validation",
+      "guard": "n/a",
+      "guard_evidence": "tests/e2e_zap.py \u2014 test harness script, not a web route (n/a)",
+      "severity": "low",
+      "severity_rationale": "FP: verify=False affects only HTTPS cert validation, but every call targets http://localhost:5050 via an http:// ZAP proxy (e2e_zap.py:9-13) -> no TLS handshake -> the flag is inert (zero security effect); test-harness/non-production is secondary",
+      "notes": "CodeQL precision:medium supports the FP",
+      "codeql_secsev": "7.5"
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 36,
+        "fingerprint": "212372714d55d580:1",
+        "ordinal": 7
+      },
+      "real": false,
+      "vuln_class": "missing-cert-validation",
+      "guard": "n/a",
+      "guard_evidence": "tests/e2e_zap.py \u2014 test harness script, not a web route (n/a)",
+      "severity": "low",
+      "severity_rationale": "FP: verify=False affects only HTTPS cert validation, but every call targets http://localhost:5050 via an http:// ZAP proxy (e2e_zap.py:9-13) -> no TLS handshake -> the flag is inert (zero security effect); test-harness/non-production is secondary",
+      "notes": "CodeQL precision:medium supports the FP",
+      "codeql_secsev": "7.5"
+    },
+    {
+      "key": {
+        "rule_id": "py/request-without-cert-validation",
+        "file": "tests/e2e_zap.py",
+        "line": 44,
+        "fingerprint": "effbe8dac176b3a1:1",
+        "ordinal": 8
+      },
+      "real": false,
+      "vuln_class": "missing-cert-validation",
+      "guard": "n/a",
+      "guard_evidence": "tests/e2e_zap.py \u2014 test harness script, not a web route (n/a)",
+      "severity": "low",
+      "severity_rationale": "FP: verify=False affects only HTTPS cert validation, but every call targets http://localhost:5050 via an http:// ZAP proxy (e2e_zap.py:9-13) -> no TLS handshake -> the flag is inert (zero security effect); test-harness/non-production is secondary",
+      "notes": "CodeQL precision:medium supports the FP",
+      "codeql_secsev": "7.5"
+    }
+  ]
+}
