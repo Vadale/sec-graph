@@ -8,7 +8,8 @@
       "role": "development",
       "url": "https://github.com/adeyosemanputra/pygoat",
       "findings": 40,
-      "included": true
+      "included": true,
+      "commit": "19d17cc"
     },
     {
       "repo": "vulpy",
@@ -42,11 +43,36 @@
       "findings": 1,
       "included": false,
       "reason": "only 1 finding (<threshold)"
+    },
+    {
+      "repo": "VAmPI",
+      "url": "https://github.com/erev0s/VAmPI",
+      "commit": "f16052d",
+      "findings": 3,
+      "included": false,
+      "reason": "only 3 findings (redos-heavy)"
+    },
+    {
+      "repo": "Damn-Vulnerable-GraphQL-Application",
+      "url": "https://github.com/dolevf/Damn-Vulnerable-GraphQL-Application",
+      "commit": "a961308",
+      "findings": 5,
+      "included": false,
+      "reason": "only 5 findings"
+    },
+    {
+      "repo": "Tiredful-API",
+      "url": "https://github.com/payatu/Tiredful-API",
+      "commit": "0134124",
+      "findings": 4,
+      "included": false,
+      "reason": "only 4 findings (Django REST)"
     }
   ],
   "sarif_sha256": {
     "pygoat": "sha256:7e8723f78ca4f8a885507eb78c3424cdb369fc326de8dfef81f3d385d9a7b859",
     "vulpy": "sha256:097335e65b42b1f324f79b021892a67e46e2e901714b8b383fda7a1f5b3af05b",
     "vulnerable-flask-app": "sha256:f58ed69ec2197cad6b1a1c368f6048ad0a90143db0836af14cdf788c271758f3"
-  }
+  },
+  "survey_note": "Surveyed 8 deliberately-vulnerable Python apps; PyGoat (40) is the outlier. Others yield <=17 CodeQL security-extended findings. No larger deliberately-vulnerable Python app found; real-app CVE commits rejected (hand-labelling real/FP at that scale infeasible; LLM-only scope). Corpus = the 3 with class variety + auth code."
 }
