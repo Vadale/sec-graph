@@ -1,12 +1,15 @@
 # sec-graph — CLAUDE.md
 
 ## Mission
-sec-graph is a local, **defensive** security tool that builds a **taint / data-flow
-map** of a codebase — showing where credentials, PII, tokens and permission checks
-travel — with Google-Maps-style toggleable layers, and hands isolated paths to an
-LLM for triage over MCP. It is built **on top of `graphify`** (MIT) and adds the
-taint engine graphify lacks. The analysis core is **deterministic — no LLM on the
-critical path**.
+sec-graph is a local, **defensive** security tool: the **interactive security map +
+local, LLM-free MCP triage layer over ANY SAST** (pivot, ADR-014). It ingests findings via
+**SARIF** (CodeQL, Semgrep, Bandit, …) or semgrep JSON, binds them to a graphify entity
+graph (Google-Maps-style toggleable layers, glow = UNGUARDED), enriches them with the
+**credentials/PII + auth/unguarded** layers no engine emits, and hands isolated,
+hash-verified path slices to the user's own LLM over MCP. A **built-in deterministic Python
+taint engine** remains as the fallback when no external report is supplied (kept, maintained,
+not the product). Built **on top of `graphify`** (MIT). The analysis core stays
+**deterministic — no LLM on the critical path**.
 
 ## The 6 non-negotiable rules
 1. **Language** — Italian with Alessandro; everything in the project (code, comments,

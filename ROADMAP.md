@@ -13,7 +13,24 @@
 > from-scratch-Rust plan; a Rust kernel port stays open as a later optimization
 > (see §17), which the "quarantine" architecture below keeps cheap.
 
-**Status:** planning complete, no code yet.
+> **Strategic pivot (decided 2026-07-19, ADR-014, supersedes the engine-first
+> positioning):** sec-graph does NOT compete with Semgrep Pro / CodeQL / Pysa on
+> taint engines. The product is the layer no SAST ships: (1) the interactive
+> **security map** (chroma = security, glow = UNGUARDED, the "Critical" preset),
+> (2) the **credentials/PII + auth/unguarded layer enrichment**, and (3) the
+> **local, deterministic, LLM-free MCP triage** (minimal hash-verified path slices
+> to the user's own LLM). Findings are **ingested from any SARIF producer** (CodeQL,
+> `semgrep --sarif`, Bandit, Snyk, …) — Semgrep as the primary OSS source (its JSON
+> `dataflow_trace` is the richest) — and our own engine (phases 2–3) is demoted to
+> the **built-in Python fallback** used only when no external report is supplied:
+> kept because it is local, deterministic, cross-file for Python, and covered by 104
+> tests — but no longer the product. The normalized **finding dict** (§8.2) is now
+> the product contract: every producer (engine or ingest) targets it; the map and
+> MCP consume it unchanged.
+
+**Status:** phases 0–8 delivered (MVP: analyze → interactive graph map + taint.json;
+MCP triage; credentials/PII + auth/unguarded layers; pip-installable wheel; 104 tests).
+Now pivoting to SARIF ingestion — **phases 9–10 below**.
 This document is the single source of truth for the build. Each phase ends with a
 ready-to-paste **Build Prompt**.
 
@@ -515,6 +532,16 @@ lines, not an MVP blocker.)
 IR/rules/taint phases are unchanged in scope — that work is irreducible. Prefix
 every session with the meta-prompt.
 
+> **Post-pivot status of phases 0–8 (ADR-014):** 0 (adapter/contract), 1 (IR — now also
+> the binding/enrichment substrate), 4 (layers+projection), 5 (map), 6 (MCP), 8 (packaging
+> + the secrets-in-code layer) — **kept, they are the product**. 2–3 (the taint engine) —
+> **kept as the built-in Python fallback; maintenance only** (H2 field-sensitivity, kwargs
+> mapping, Tier-3 generics move to the icebox). 7 — **superseded** by ingestion (Semgrep/
+> CodeQL rule breadth replaces our framework packs; the Pysa recall oracle is obsolete —
+> Pysa is now an *input* via SARIF), except the auth-barrier vocabulary folded into Phase 10.
+> §19's "JavaScript/TypeScript taint" item is **dropped**: JS/TS arrives by ingesting
+> CodeQL/Semgrep output, not by building a second engine. **Phases 9–10 are the active work.**
+
 > **Meta-prompt (start of every phase):**
 > "Read `roadmap.md` in full, then implement **Phase N** as specified in §14.
 > Follow the non-negotiable principles (§2) — especially the quarantine wall and
@@ -569,7 +596,7 @@ CFG/def-use snapshot tests pass.
 
 ---
 
-### Phase 2 — Rules engine + intraprocedural taint  *(Week 2)*
+### Phase 2 — Rules engine + intraprocedural taint  *(Week 2 — DONE; engine fallback, maintenance only, ADR-014)*
 
 **Goal:** find a source→sink flow *within a function*, respecting sanitizers.
 **Deliverables:** `secgraph/rules/` YAML loader (§10) + `rules/python/{flask,stdlib}.yml`
@@ -588,7 +615,7 @@ sanitizer on the path suppresses the finding.
 
 ---
 
-### Phase 3 — Interprocedural summaries + the KILL-GATE  *(Week 3)*
+### Phase 3 — Interprocedural summaries + the KILL-GATE  *(Week 3 — DONE; engine fallback, maintenance only, ADR-014)*
 
 **Goal:** the core value — cross-function/cross-file paths — on graphify's skeleton.
 **Deliverables:** function summaries (conditional: "return tainted iff argN
@@ -678,7 +705,7 @@ minimal hash-verified slice; token count a fraction of dumping the involved file
 
 ---
 
-### Phase 7 — Framework depth + performance  *(Week 7)*
+### Phase 7 — Framework depth + performance  *(Week 7 — SUPERSEDED by Phase 9 ingestion, except the auth-barrier vocabulary folded into Phase 10; ADR-014)*
 
 **Goal:** real Flask/FastAPI surface + fast warm runs.
 **Deliverables:** entrypoint recognizers (Flask `@app.route`/blueprints, FastAPI
@@ -715,6 +742,110 @@ sec-graph shows *something* useful on a Go/Java repo.
 > dataflow'), and an attack-surface entry-point pack. Write the wow-first README with
 > a GIF, a version-pin/upgrade policy for graphifyy, and `uv`/PyPI packaging. Ensure
 > the tool produces a useful map on a non-Python (e.g. Go) repo."
+
+---
+
+### Phase 9 — SARIF / Semgrep ingestion: the map over ANY SAST  *(pivot, part 1)*
+
+**Goal:** `secgraph analyze <path> --sarif results.sarif` renders external findings
+(CodeQL, Semgrep, Bandit, …) through our unchanged map + MCP pipeline; the built-in
+engine becomes the no-SARIF fallback.
+**Deliverables:** `secgraph/ingest/` (`sarif.py`, `semgrep.py`, `normalize.py`,
+graphify-free) mapping SARIF 2.1.0 `results` + `codeFlows/threadFlows` and semgrep JSON
+`extra.dataflow_trace` to the normalized finding dict (§8.2 + additive fields `rule_id`,
+`message`, `hops`, `provenance`, `guard_status:"unknown"`). Field maps: primary
+`result.locations[0]` → sink `file:line`; first/last `threadFlow` location → source/sink
+(codeFlows absent → `source := sink`, rendered as a self-loop); each threadFlow location →
+a `hops[]` entry `{file,line,expr}`; `result.ruleId`/`taxa`/`properties.tags` → `sink_id` +
+`cwe` (`(?i)cwe[-_/ ]?0*(\d+)`); `level` + `properties["security-severity"]` → severity;
+`properties.precision` → confidence. The **URI/path normalizer**: uriBaseId chains,
+`file://` + percent-decode + Windows paths, absolute→relative, unique whole-segment
+**suffix-rescue** against known files, and a **root clamp** — an ingested path may never
+resolve outside the analyzed root (else `get_path_slice`/`_read_slice` could exfiltrate
+`../../etc/passwd`). Dedup on `(rule_id, source, sink)`; slices + `file_hashes` computed
+from disk at ingest (reuse `_read_slice`/`_file_hash`); a snippet cross-check →
+`provenance:"ingest:line-drift"` + confidence capped low. `project.py` refactored so the
+projection consumes finding **dicts** (shared `emit_artifacts(root, out_dir, findings, modules)`
+tail) with a structural **binding ladder** span → nearest-def → file-node → none (ADR-008,
+no name joins; provenance-tagged); the ingest **binding report** on stdout; the `map.js`
+**empty-neighborhood → full-graph** fallback (zero bound findings must never blank the
+canvas); `get_path_slice` emits hash-verified **per-hop** windows when `hops` exist (closes
+the ADR-011 deferral); every finding carries ≥1 **data** layer (`untrusted-input` default)
+so the layer toggles can never orphan it. `taint.json` gains `engine:{mode:"ingest"|"builtin", inputs:[…]}`.
+**Acceptance (executable):**
+```
+pytest tests/ingest tests/project tests/mcp -q                      # green
+secgraph analyze tests/fixtures/tiny --sarif tests/fixtures/ingest/tiny.sarif
+  # prints "ingested N findings … bound N/N" and writes the 3 artifacts; the engine did NOT run
+python -c "import json;d=json.load(open('graphify-out/taint.json'));f=d['findings'][0];\
+assert d['engine']['mode']=='ingest' and f['source_node'] and f['sink_node'] and f['hops']"
+secgraph analyze tests/fixtures/tiny --sarif tests/fixtures/ingest/tiny-otherroot.sarif   # suffix-rescue
+# determinism: analyze twice -> byte-identical taint.json
+# fixture SARIF covers: 2 runs/tools, a codeFlows result, a locations-only (self-loop) result,
+#   an absolute file:// URI, a uriBaseId URI, and a ../ escape attempt -> unbound + clamped
+```
+> **Build Prompt — Phase 9:** "Implement `secgraph/ingest/` (`sarif.py`, `semgrep.py`,
+> `normalize.py`; no graphify imports) converting SARIF 2.1.0 results (+codeFlows/threadFlows,
+> multi-run) and semgrep JSON (+extra.dataflow_trace, tolerating the CliLoc/CliCall tagged
+> variants) into the normalized finding dicts of §8.2, with the field maps, severity/CWE
+> tables, URI normalizer (uriBaseId chain, file://, percent-decode, suffix rescue, root
+> clamp), dedup, and disk-computed slices/file_hashes (reuse `project._read_slice`/`_file_hash`)
+> + the snippet drift check. Refactor `secgraph/project.py`: extract `emit_artifacts(root,
+> out_dir, findings: list[dict], modules)` and make `_annotate_graph_json` consume dicts with
+> the binding ladder span → nearest-def → file → none (provenance-tagged; structural joins
+> only, ADR-008; node count unchanged). Wire `secgraph analyze <path> --sarif F --semgrep-json
+> F` (repeatable; any ingest flag skips the taint engine, graphify + IR still run), print the
+> binding report, stamp taint.json `engine` provenance. Add the map.js empty-NEIGH full-graph
+> fallback and per-hop windows in `TaintView.get_path_slice`. Hand-written fixtures under
+> `tests/fixtures/ingest/` (no semgrep/CodeQL dependency in CI). Determinism: identical inputs
+> ⇒ byte-identical taint.json."
+
+---
+
+### Phase 10 — Layer enrichment over ingested findings  *(pivot, part 2 — the differentiator)*
+
+**Goal:** ingested findings gain what no SAST emits — credentials/PII layers, secret
+classification, and the auth/unguarded verdict — honestly labeled.
+**Deliverables:** `secgraph/ingest/enrich.py`: (a) **lexical sensitive-data labels at the
+flow's anchor points** — identifiers on the source/sink/hop lines through `ident_label`,
+quoted literals through `classify_secret` — layers add-only, confidence capped at medium,
+`provenance:"enrich:lexical@…"` (identifier-on-a-verified-flow, *not* taint-on-the-value:
+stronger than grep, weaker than ADR-009 origins — labeled so); (b) the **unguarded verdict**
+for Python sinks by reusing `guard_map(fn, module.imports, rules)` over the enclosing
+`FunctionIR` from the already-built project IR → `guards`/`unguarded`/`guard_status:"analyzed"`;
+(c) the honest **tri-state** for everything else (non-Python sink, unparseable, no enclosing
+function): `guard_status:"unknown"` with `unguarded:false, guards:[]` and consumers that claim
+**neither** verdict — `map.js` badge "guards unknown" (no glow, **no** green ring, legend row),
+`mcp_view._rank` orders `unguarded < unknown < guarded`, `find_unguarded_sinks` excludes
+unknowns by default (+`unknown_count`, `include_unknown`); (d) `explain_layer` provenance gains
+the ingested tools/rule_ids per layer; (e) the FastAPI `Depends` barrier vocabulary from old
+Phase 7 lands in `rules/labels.yml` barriers. The built-in-engine path stays **bit-identical**
+(it never emits `unknown`).
+**Acceptance (executable):**
+```
+pytest tests/ingest tests/mcp -q                                    # green
+secgraph analyze tests/fixtures/ingest/enrich-app --sarif tests/fixtures/ingest/enrich.sarif
+python -c "import json;fs=json.load(open('graphify-out/taint.json'))['findings'];\
+by=lambda r: next(f for f in fs if f['rule_id']==r);\
+f1=by('sqli-with-password'); assert 'credentials' in f1['layers'] and any(p.startswith('enrich:lexical') for p in f1['provenance']);\
+f2=by('sqli-behind-login');  assert f2['guard_status']=='analyzed' and not f2['unguarded'] and 'login_required' in f2['guards'];\
+f3=by('js-sqli');            assert f3['guard_status']=='unknown' and not f3['unguarded']"
+# find_unguarded_sinks excludes f3 by default and reports unknown_count == 1
+# determinism: analyze twice -> byte-identical taint.json
+```
+> **Build Prompt — Phase 10:** "Implement `secgraph/ingest/enrich.py` applying, to every
+> ingested finding: word-based `ident_label` + `classify_secret` over the source/sink/hop
+> lines (layers add-only, confidence ≤ medium, provenance `enrich:lexical@…`/`enrich:secret:…`),
+> and — when the sink file is Python — the ADR-010 guard analysis via `guard_map` on the
+> enclosing FunctionIR from the project IR (guards at the sink statement's span; decorators-only
+> fallback), setting guard_status 'analyzed'; everything else gets the tri-state 'unknown'
+> (unguarded:false, guards:[]). Update the consumers to render the tri-state honestly: map.js
+> badge 'guards unknown' with no glow and no green ring + legend row; mcp_view rank unguarded <
+> unknown < guarded; find_unguarded_sinks excludes unknowns by default with unknown_count +
+> include_unknown; explain_layer lists ingested tools/rule_ids. Never credit an unproven guard
+> (ADR-010); never remove a layer. Add the enrich-app fixture + SARIF with the three canonical
+> cases (credential-named source line, sink under @login_required, non-Python sink). Engine-path
+> output must remain bit-identical."
 
 ---
 
@@ -845,9 +976,10 @@ determinism, offline, and node-count-unchanged tests green.
 
 ## 19. Post-MVP roadmap
 
-- **JavaScript/TypeScript** taint (Express, Next.js): reuse the IR driver + a
-  per-language `LanguageConfig` (imitating graphify's own pattern); CJS+ESM,
-  re-exports/barrels, destructuring (`const {body} = req`).
+- ~~**JavaScript/TypeScript** taint (Express, Next.js): reuse the IR driver + a
+  per-language `LanguageConfig`~~ — **DROPPED (ADR-014):** JS/TS (and every other
+  language) arrives by **ingesting CodeQL/Semgrep SARIF** (Phase 9), not by building a
+  second engine. Enrichment (Phase 10) is what we add on top.
 - **Cross-tier "network-hop" edge**: match frontend `fetch/axios` literal URL+method
   to backend routes; dashed low-confidence edge stitching frontend→backend. No real
   request-body taint.

@@ -52,22 +52,30 @@ findings with code slices + trace) · `secgraph.html` (self-contained layered ma
 See `diary/2026-07-19-13-viz.md` (Phase 5), `-12-mcp.md`, `-11-wpc2.md`, `-10-wpc1.md`, `-06-killgate.md`.
 
 ## Decisions locked
-`DECISIONS.md` ADR-000..013 (010 = auth barriers + unguarded; 011 = MCP thin-wrapper-over-pure-view;
-012 = hand-rolled Canvas graph viz, no library; 013 = packaging bundles the data, keeps the layout).
+`DECISIONS.md` ADR-000..014 (011 = MCP thin-wrapper-over-pure-view; 012 = hand-rolled Canvas graph
+viz; 013 = packaging bundles the data; **014 = PIVOT — map + local-LLM-triage layer over ANY SAST via
+SARIF ingestion; the taint engine is demoted to the built-in Python fallback**).
 
-## Next session — deferred refinements (MVP complete; B + C done)
-### A. Phase 7 — entrypoint / attack-surface recognizers
-Flask routes, FastAPI `Depends(get_current_user)` barriers, per-framework entry detection. Also the
-**sound fix for the unguarded-sink entrypoint-scope caveat** (a helper reached only from a guarded
-route currently reads unguarded) — via entrypoint→source barrier reachability.
+## Next session — the PIVOT (ADR-014, planned with a Fable 5 max agent → ROADMAP Phases 9–10)
+The MVP (phases 0–8) is done and stays; the product is now the **map + enrichment + MCP triage over
+ingested SARIF**, not our engine. Open with `new-wp` and write the executable acceptance first.
 
-### B. Resolver / taint precision
-Tier-3 **generics** (`Optional[User]`/`Union` → inner type; skip containers). **H2** field-sensitivity
-(`self.x = tainted` laundering through an untracked channel — the `AccessPath` k=1 model exists).
+### Phase 9 — SARIF / Semgrep ingestion  ← next
+`secgraph/ingest/{sarif,semgrep,normalize}.py`: map SARIF 2.1.0 `results`+`codeFlows` / semgrep
+`dataflow_trace` → the normalized finding dict; the URI normalizer + **root clamp**; refactor
+`project.py` to a dict-consuming `emit_artifacts` tail with the structural binding ladder
+(span→nearest-def→file→none). `analyze <path> --sarif F`. **The trap:** zero-bind → blank map — see
+ADR-014 (normalizer + suffix-rescue + binding report + map empty-NEIGH full-graph fallback). Reuses
+graphify (substrate), the projection join (ADR-008), viz, MCP unchanged.
 
-### C. CI / release
-Wire the wheel build + publish into CI; a pinned real-repo benchmark harness in `tests/benchmarks/`
-(the KILL-GATE repos were cloned ad-hoc — pin them for regression).
+### Phase 10 — Layer enrichment over ingested findings
+`secgraph/ingest/enrich.py`: `ident_label`/`classify_secret` on the flow's source/sink/hop lines +
+`guard_map` on Python sinks; the honest **guard tri-state** (`analyzed`/`unknown`) rendered without a
+false glow or a false green ring. The differentiator over raw SAST output.
+
+### Icebox (engine is fallback now)
+H2 field-sensitivity, Tier-3 generics, kwargs mapping — only if a fallback bug demands it. CI wheel
+publish + a pinned benchmark harness. **Verify before README claims:** the licence/scope notes in ADR-014.
 
 ### C. Resolver/summary precision (lower priority)
 - **Tier-3 annotation typing** (`def f(u: User)`) — the fastapi UNK/TRR mover (deferred; Fable

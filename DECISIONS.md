@@ -299,3 +299,58 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
 - **Rejected:** moving `rules/` under the package (churns the documented "where things live" +
   every reference); a zip-safe install (the loader globs `*.yml`, which needs a real filesystem
   path — fine, pip installs unzipped).
+
+## ADR-014 — Pivot: the map + local-LLM-triage layer over ANY SAST (SARIF ingestion; engine demoted to fallback)
+- 2026-07-19 · Accepted (design consulted with a Fable 5 max agent)
+- **Context:** phases 0–8 delivered a working MVP, but the taint engine competes with Semgrep Pro /
+  CodeQL / Pysa — mature, multi-language, better-funded — and we never measured precision/recall on a
+  labelled corpus. The uncrowded value we actually built is the layer no SAST ships: the interactive
+  security map (ADR-012), the credentials/PII + auth/unguarded enrichment (ADR-009/010), and the
+  deterministic LLM-free MCP triage over minimal hash-verified slices (ADR-011).
+- **Decision (positioning):** sec-graph is the **map + local-LLM-triage layer over any SAST**. External
+  findings are ingested and flow through the existing projection → map → MCP pipeline unchanged. Our
+  engine is **demoted to the built-in Python fallback** (used only when no external report is given) —
+  kept, not deleted: local, deterministic, cross-file for Python (deeper than semgrep OSS on that axis),
+  104 tests. Engine work is maintenance-only; JS/TS taint is dropped — breadth arrives via ingestion.
+- **Decision (SARIF as the ingestion contract):** SARIF 2.1.0 (`results` + `locations` +
+  `codeFlows/threadFlows` + `ruleId`/`taxa`/`level`) is the primary contract — the OASIS standard every
+  relevant producer emits; semgrep's native JSON is the richer secondary (`dataflow_trace`). Both map to
+  the one **normalized finding dict** (taint.json §8.2 + additive `rule_id`/`message`/`hops`/`provenance`/
+  `guard_status`), which is hereby the **product contract**: every producer targets it; viz and MCP
+  consume it and nothing else. Parsers are defensive and pinned by hand-written fixtures
+  (`tests/fixtures/ingest/`), like the graphify contract test.
+- **Decision (binding + honesty):** ingested findings bind to graphify nodes structurally only (ADR-008):
+  Python via the (file, def-line) span join; other languages via a nearest-preceding-def-line fallback
+  (graphify has no end lines — pitfall #1), then the file node; provenance records
+  `binding:span|nearest-def|file|none`. Ingested paths are normalized (uriBaseId, file://, percent-decode,
+  suffix rescue) and **clamped inside the analyzed root** — a hostile SARIF must not steer slice reads
+  outside the tree. Zero-bind is loud (binding report + map full-graph fallback), never a silent blank map.
+- **Decision (enrichment + the guard tri-state):** enrichment is location-based on the tool-verified flow
+  (identifiers/literals on source/sink/hop lines via `ident_label`/`classify_secret`, add-only, confidence
+  ≤ medium, `enrich:*` provenance) — stronger than grep (the anchor is a proven flow), weaker than ADR-009
+  origins (no value tracking), and labelled as such. Guards: Python sinks get the real ADR-010 `guard_map`
+  analysis (`guard_status:"analyzed"`); everything else is `guard_status:"unknown"` with
+  `unguarded:false, guards:[]` and consumers that claim **neither** verdict (no glow, no green ring, badge
+  "guards unknown", ranked between unguarded and guarded, excluded from `find_unguarded_sinks` by default
+  with `unknown_count`). Preserves ADR-010's asymmetry (no false "guarded") without drowning the glow in
+  false "unguarded".
+- **Why:** the map/enrichment/triage trio is differentiated and composable with every engine users
+  already run; competing on taint depth is a losing race. SARIF makes the input a stable standard rather
+  than N tool APIs. The finding-dict-as-contract means the whole downstream (map, MCP) is untouched.
+- **The one trap:** zero-bind is silent and total (bad URI form, root disagreement, or commit skew all
+  funnel into an empty `NEIGH` → blank canvas). Avoided by the URI normalizer + suffix rescue +
+  `--sarif-strip`, the root clamp (also a real path-traversal fix in `_read_slice`/`get_path_slice`), a
+  loud binding report, the map's empty-neighborhood full-graph fallback, the snippet drift check, and a
+  Phase-9 acceptance test that ingests a SARIF generated from a *different cwd*.
+- **License / scope to verify before README claims:** Semgrep CLI LGPL-2.1 (we never bundle — user runs
+  it, we read the file; registry rules carry a commercial-restriction licence + `--config auto` phones
+  home → recommend explicit configs + `--metrics=off`); CodeQL free only for OSS/research (closed-source
+  needs GH Advanced Security — the *user's* obligation); Pysa MIT (SARIF via SAPP); Bandit Apache-2.0.
+  Semgrep OSS taint is intra-file (cross-file is Pro) → OSS-semgrep ingest is mostly self-loops; the
+  cross-file drama comes from CodeQL/Pro or **our own fallback** (a reason it survives). Ingest requires
+  the source tree at the analyzed root (substrate + slices + hashes); SARIF-only tree-less mode is out.
+- **Rejected:** competing on the engine (crowded, capital-intensive); deleting the engine (loses the
+  zero-dependency demo + deterministic fixture base); shelling out to semgrep from `analyze` (determinism,
+  licences, dependency weight — users run their SAST, we ingest the artifact); per-tool native adapters
+  only, no SARIF (unbounded N×M); `unguarded:true` for unknown guard status (alarm-fatigue kills the
+  glow's signal); name-based node binding (re-banned; ADR-008).
