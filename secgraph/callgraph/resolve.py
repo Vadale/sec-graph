@@ -224,6 +224,17 @@ def _local_types(fn: FunctionIR, module: ModuleIR, index: FnIndex) -> dict[str, 
     return types
 
 
+def _annotation_origin(ann: str, module: ModuleIR, index: FnIndex) -> Origin:
+    """Tier-3: the value-origin of a parameter typed ``ann`` -- a project class (its methods then
+    bind) or a library type (external). Resolves the annotation via the module's imports / a
+    same-module class; annotations reference module-scope names, so the shadow-map is not used."""
+    root = ann.split(".", 1)[0]
+    if root in module.imports:                              # imported type: `from models import User`
+        return _origin_of_fqn(module.imports[root] + ann[len(root):], index)
+    same = f"{module_name(module.source_file)}.{ann}"       # same-module class
+    return ("class", same) if same in index.classes else "unknown"
+
+
 def _receiver_origin(base: str, fn: FunctionIR, module: ModuleIR, index: FnIndex) -> Origin:
     if base == "self" and fn.enclosing_class:
         cfqn = f"{module_name(module.source_file)}.{fn.enclosing_class}"
@@ -231,6 +242,10 @@ def _receiver_origin(base: str, fn: FunctionIR, module: ModuleIR, index: FnIndex
     lt = _local_types(fn, module, index)
     if base in lt:
         return lt[base]
+    if base in fn.param_types:                              # Tier-3: parameter annotation
+        origin = _annotation_origin(fn.param_types[base], module, index)
+        if origin != "unknown":
+            return origin
     if base in module.globals:
         return _origin_of_fqn(module.globals[base], index)
     imap = _shadow_imap(module, fn)

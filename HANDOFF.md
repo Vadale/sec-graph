@@ -1,10 +1,10 @@
 # HANDOFF — state for the next session
 
 ## Where we are
-Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 + Phase 6 (MCP) + Phase 5 (graph viz)
-complete. 101 tests green**, quarantine wall intact, all reviewed by the `reviewer` agent and
-simplify-passed. **Phases 4, 5, 6 are done** — the whole mission pipeline works end-to-end: the
-interactive layered graph map + LLM-triage-over-MCP. Dev env `.venv`
+Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 + Phase 6 (MCP) + Phase 5 (graph viz) +
+Tier-3 typing complete. 104 tests green**, quarantine wall intact, reviewed + simplify-passed
+(Tier-3 self-verified, additive — see diary 14). **Phases 4, 5, 6 are done** — the whole mission
+pipeline works end-to-end: the interactive graph map + LLM-triage-over-MCP. Dev env `.venv`
 (`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
 
 `secgraph analyze <path>` now produces the **three artifacts + the demo**:
@@ -54,17 +54,16 @@ See `diary/2026-07-19-13-viz.md` (Phase 5), `-12-mcp.md`, `-11-wpc2.md`, `-10-wp
 `DECISIONS.md` ADR-000..012 (009 = sensitive-data layers via Origin mint; 010 = auth barriers +
 unguarded; 011 = MCP thin-wrapper-over-pure-view; 012 = hand-rolled Canvas graph viz, no library).
 
-## Next session — pick one  (Alessandro's order: B then C)
-### B. Resolver precision — Tier-3 annotation typing (fastapi UNK/TRR mover)  ← next
-`def f(u: User)` param-annotation typing raises binding on annotation-saturated DI code
-(fastapi-realworld was UNK 50.8% / TRR 52.7%). Read a param's annotation, type its receiver, resolve
-its method calls. Pure analysis in `secgraph/callgraph` + `ir`, no new deps. Then **H2**
-field-sensitivity (`self.x = tainted` laundering).
-
-### C. Phase 8 — packaging
+## Next session — pick one  (Alessandro's order: B done → C next)
+### C. Phase 8 — packaging  ← next
 Package `rules/` **and the `viz/` map.css/map.js assets** as importlib package data (they're read
 from `__file__`-relative paths today — fine for the editable dev install, must become
 `importlib.resources` for a wheel); a `pip install`-able wheel; CI publish.
+
+### D. Resolver precision (lower priority, after packaging)
+Tier-3 **generics** (`Optional[User]`/`Union` → inner type; skip containers). **H2**
+field-sensitivity (`self.x = tainted` laundering through an untracked channel). Tier-3 typing itself
+(bare + dotted annotations) shipped — see diary 14.
 
 ### C. Resolver/summary precision (lower priority)
 - **Tier-3 annotation typing** (`def f(u: User)`) — the fastapi UNK/TRR mover (deferred; Fable

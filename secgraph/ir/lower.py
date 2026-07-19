@@ -432,6 +432,29 @@ def _param_names(parameters) -> list[str]:
     return out
 
 
+def _annotation_name(type_node) -> Optional[str]:
+    """A parameter annotation's dotted type name (``User``, ``auth.Svc``), or None for a generic /
+    complex annotation (``Optional[X]``, ``List[X]``) -- deferred; a safe under-claim (Tier-3)."""
+    if type_node is None:
+        return None
+    n = type_node.named_children[0] if type_node.type == "type" and type_node.named_children else type_node
+    return _text(n) if n.type in ("identifier", "attribute") else None
+
+
+def _param_annotations(parameters) -> dict[str, str]:
+    """``param name -> annotation dotted type name`` for ``def f(u: User, s: auth.Svc)`` (Tier-3)."""
+    out: dict[str, str] = {}
+    if parameters is None:
+        return out
+    for c in parameters.named_children:
+        if c.type in ("typed_parameter", "typed_default_parameter"):
+            ident = next((d for d in c.named_children if d.type == "identifier"), None)
+            name = _annotation_name(c.child_by_field_name("type"))
+            if ident is not None and name is not None:
+                out[_text(ident)] = name
+    return out
+
+
 def _iter_function_defs(node) -> Iterator:
     if node.type == "function_definition":
         yield node
@@ -501,6 +524,7 @@ def _lower_function(fn, source_file: str) -> FunctionIR:
         source_file=source_file,
         field_escape=_has_field_escape(fn),
         decorators=_decorator_names(fn),
+        param_types=_param_annotations(fn.child_by_field_name("parameters")),
     )
 
 
