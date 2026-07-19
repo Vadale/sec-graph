@@ -100,9 +100,10 @@ def build_server(out_dir: Path | str):
         return view.get_path_slice(path_id, context_lines)
 
     @mcp.tool()
-    def find_unguarded_sinks(layer: str | None = None) -> dict:
-        """Paths reaching a dangerous sink with no auth barrier detected on the path (guards == [])."""
-        return view.find_unguarded_sinks(layer)
+    def find_unguarded_sinks(layer: str | None = None, include_unknown: bool = False) -> dict:
+        """Paths reaching a dangerous sink with no auth barrier on the path. Excludes ingested findings
+        whose guard state we could not analyze unless `include_unknown` (reports `unknown_count`)."""
+        return view.find_unguarded_sinks(layer, include_unknown)
 
     @mcp.tool()
     def explain_layer(layer: str) -> dict:

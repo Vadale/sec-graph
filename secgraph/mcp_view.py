@@ -16,9 +16,16 @@ _CONF = {"high": 3, "medium": 2, "low": 1}
 _SEV = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
 
+def _guard_rank(f: dict) -> int:
+    """unguarded (0) < guards-unknown (1) < guarded (2) -- an unanalyzed ingested finding sits between."""
+    if f.get("unguarded"):
+        return 0
+    return 1 if f.get("guard_status") == "unknown" else 2
+
+
 def _rank(f: dict) -> tuple:
-    """Ranking key: unguarded first, then severity, then confidence, then id (stable)."""
-    return (0 if f.get("unguarded") else 1,
+    """Ranking key: guard state, then severity, then confidence, then id (stable)."""
+    return (_guard_rank(f),
             -_SEV.get(f.get("severity", ""), 0), -_CONF.get(f.get("confidence", ""), 0), f.get("id", ""))
 
 
@@ -42,10 +49,14 @@ class TaintView:
         return {"total": len(ranked), "offset": offset, "limit": limit,
                 "paths": [self._summary(f) for f in page]}
 
-    def find_unguarded_sinks(self, layer: str | None = None) -> dict:
+    def find_unguarded_sinks(self, layer: str | None = None, include_unknown: bool = False) -> dict:
         rows = [f for f in self.findings if f.get("unguarded")]
+        if include_unknown:                              # ingested findings we could not analyze
+            rows += [f for f in self.findings if f.get("guard_status") == "unknown"]
         rows = self._filter(rows, layer, None, None)
-        return {"total": len(rows), "paths": [self._summary(f) for f in sorted(rows, key=_rank)]}
+        unknown = sum(1 for f in self.findings if f.get("guard_status") == "unknown")
+        return {"total": len(rows), "unknown_count": unknown,
+                "paths": [self._summary(f) for f in sorted(rows, key=_rank)]}
 
     def get_path_slice(self, path_id: str, context_lines: int = 3) -> dict:
         f = self.by_id.get(path_id)
@@ -128,7 +139,8 @@ class TaintView:
             "source": f"{f['source_id']} @ {f['source_file']}:{f['source_line']}",
             "sink": f"{f['sink_id']} @ {f.get('sink_file') or f['source_file']}:{f['sink_line']}",
             "layers": f.get("layers", []), "confidence": f.get("confidence"),
-            "unguarded": f.get("unguarded"), "guards": f.get("guards", []), "hops": f.get("trace", []),
+            "unguarded": f.get("unguarded"), "guard_status": f.get("guard_status", "analyzed"),
+            "guards": f.get("guards", []), "hops": f.get("trace", []),
         }
 
     def _window(self, role: str, rel: str, line: int, ctx: int, expected_hash: str | None) -> dict:

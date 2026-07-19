@@ -196,6 +196,7 @@ def analyze_ingest(path: Path | str, out_dir: Path | str, sarif_paths, semgrep_p
     through the same projection + map + MCP pipeline. graphify + the IR still run (map substrate +
     span binding + Phase-10 enrichment); the taint engine does not."""
     from .ingest import ingest_findings
+    from .ingest.enrich import enrich_findings
     from .ir import build_project_ir
     from .rules import default_rules_dir, load_rules
 
@@ -203,6 +204,7 @@ def analyze_ingest(path: Path | str, out_dir: Path | str, sarif_paths, semgrep_p
     rules = load_rules(default_rules_dir())
     modules = build_project_ir(path)
     findings, report = ingest_findings(path, sarif_paths, semgrep_paths, rules)
+    enrich_findings(findings, path, modules, rules)          # credentials/PII layers + auth verdict
     r = emit_artifacts(path, out_dir, findings, modules, {"mode": "ingest", "inputs": report.inputs})
     r["report"] = report
     return r

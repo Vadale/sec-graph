@@ -1,0 +1,31 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "Semgrep", "semanticVersion": "1.60.0", "rules": [
+        { "id": "sqli-with-password", "properties": { "tags": ["CWE-89"] } },
+        { "id": "sqli-behind-login", "properties": { "tags": ["CWE-89"] } },
+        { "id": "js-sqli", "properties": { "tags": ["CWE-89"] } } ] } },
+      "results": [
+        { "ruleId": "sqli-with-password", "level": "error", "message": { "text": "SQLi from form password." },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "views.py" }, "region": { "startLine": 19 } } } ],
+          "codeFlows": [ { "threadFlows": [ { "locations": [
+            { "location": { "physicalLocation": { "artifactLocation": { "uri": "views.py" }, "region": { "startLine": 17 } } } },
+            { "location": { "physicalLocation": { "artifactLocation": { "uri": "views.py" }, "region": { "startLine": 19 } } } }
+          ] } ] } ] },
+        { "ruleId": "sqli-behind-login", "level": "error", "message": { "text": "SQLi behind @login_required." },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "views.py" }, "region": { "startLine": 13 } } } ],
+          "codeFlows": [ { "threadFlows": [ { "locations": [
+            { "location": { "physicalLocation": { "artifactLocation": { "uri": "views.py" }, "region": { "startLine": 11 } } } },
+            { "location": { "physicalLocation": { "artifactLocation": { "uri": "views.py" }, "region": { "startLine": 13 } } } }
+          ] } ] } ] },
+        { "ruleId": "js-sqli", "level": "error", "message": { "text": "SQLi in a JS file (guard state unknown)." },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "app.js" }, "region": { "startLine": 3 } } } ],
+          "codeFlows": [ { "threadFlows": [ { "locations": [
+            { "location": { "physicalLocation": { "artifactLocation": { "uri": "app.js" }, "region": { "startLine": 2 } } } },
+            { "location": { "physicalLocation": { "artifactLocation": { "uri": "app.js" }, "region": { "startLine": 3 } } } }
+          ] } ] } ] }
+      ]
+    }
+  ]
+}

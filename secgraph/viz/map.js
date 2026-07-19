@@ -45,7 +45,10 @@ for (const f of FIND) {
 }
 function strongest(cur, layer){ if (!cur) return layer;
   return DATA_PRIORITY.indexOf(layer) < DATA_PRIORITY.indexOf(cur) ? layer : cur; }
-function markGuard(node, f){ if (f.unguarded) node.unguarded = true; else node.guarded = true; }
+// guard_status "unknown" (an ingested finding we could not analyze) claims NEITHER verdict:
+// no red glow AND no green ring -- ADR-010's asymmetry without a false glow. Missing guard_status
+// (the built-in engine, which always analyzes) is treated as analyzed.
+function markGuard(node, f){ if (f.guard_status==="unknown") return; if (f.unguarded) node.unguarded = true; else node.guarded = true; }
 
 // security neighborhood = finding endpoints + their files + 1-hop call neighbors
 const CORE = new Set();
@@ -343,8 +346,9 @@ function renderList(){
     const fm=document.createElement("div");fm.className="fm";fm.textContent=(f.cwe?f.cwe+" · ":"")+(f.trace&&f.trace.length?f.trace.join(" → "):f.function);
     ff.append(fl,fm);
     row.append(sev,ff);
-    const badge=document.createElement("span");badge.className="badge "+(f.unguarded?"ung":"grd");
-    badge.textContent=f.unguarded?"UNGUARDED":"guarded";row.append(badge);
+    const un=f.guard_status==="unknown";
+    const badge=document.createElement("span");badge.className="badge "+(un?"unk":f.unguarded?"ung":"grd");
+    badge.textContent=un?"guards ?":f.unguarded?"UNGUARDED":"guarded";row.append(badge);
     row.onclick=()=>focusFinding(f);
     p.append(row);
   }
@@ -375,7 +379,8 @@ function finRow(f){const row=document.createElement("div");row.className="frow";
   const sev=document.createElement("span");sev.className="sev";sev.style.background=sevColor(f.severity);
   const ff=document.createElement("div");ff.className="ff";const fl=document.createElement("div");fl.className="fl";
   fl.textContent=f.source_id+" → "+f.sink_id;ff.append(fl);row.append(sev,ff);
-  const b=document.createElement("span");b.className="badge "+(f.unguarded?"ung":"grd");b.textContent=f.unguarded?"UNGUARDED":"guarded";
+  const un=f.guard_status==="unknown";
+  const b=document.createElement("span");b.className="badge "+(un?"unk":f.unguarded?"ung":"grd");b.textContent=un?"guards ?":f.unguarded?"UNGUARDED":"guarded";
   row.append(b);row.onclick=()=>focusFinding(f);return row;}
 function card(f){
   const c=document.createElement("div");c.className="card";
