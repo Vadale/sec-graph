@@ -358,6 +358,7 @@ def resolve_all_sites(
                             "file": fn.source_file, "line": call.span.start_line,
                             "col": call.span.start_col, "category": category,
                             "method": isinstance(call.func, Attr),
+                            "tsk": (fn.source_file, site_key(call)),
                         })
             if fn_sites:
                 sites[fn_key(fn)] = fn_sites
@@ -382,3 +383,18 @@ def binding_rate(rows: list[dict]) -> dict:
         "unresolved_project": unresolved_project, "unknown_receiver": unknown,
         "method_sites": method_sites, "PCR": pcr, "UNK": unk,
     }
+
+
+_RESOLVED_CATEGORIES = frozenset({
+    "rule", "builtin", "bound", "bound-import", "bound-local", "bound-oracle", "external",
+})
+
+
+def trr(rows: list[dict], tainted_sites: set) -> dict:
+    """ADR-007 TRR: over call sites on a tainted path (a receiver/arg carries taint at the
+    fixpoint), the fraction classified rule|builtin|bound|external -- 'on the paths that
+    matter, do we know what the call is'. ``tainted_sites`` comes from ``run_project_full``."""
+    rel = [r for r in rows if r.get("tsk") in tainted_sites]
+    resolved = sum(1 for r in rel if r["category"] in _RESOLVED_CATEGORIES)
+    return {"tainted_sites": len(rel), "resolved": resolved,
+            "TRR": resolved / len(rel) if rel else 1.0}

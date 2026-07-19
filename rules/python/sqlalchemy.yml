@@ -1,0 +1,37 @@
+# SQLAlchemy modeling. Query-builder methods are propagators (taint flows from the receiver
+# query + args to the returned query), so tainted data stays legible through a chain and the
+# calls classify as `rule` (not unknown-receiver) -- the TRR mover on ORM code. The injection
+# sink is raw execution; ORM filter(...) is parameterized (safe) so it is only a propagator.
+language: python
+framework: sqlalchemy
+
+propagators:
+  - id: sa-query-chain
+    kind: call
+    callee: [".filter", ".filter_by", ".where", ".having", ".order_by", ".group_by",
+             ".distinct", ".limit", ".offset", ".join", ".outerjoin", ".subquery",
+             ".select_from", ".with_entities", ".from_statement", ".options", ".values",
+             ".params", ".union", ".union_all", ".slice", ".add_columns"]
+    from_args: [any]
+    to: return
+  - id: sa-query-terminal
+    kind: call
+    callee: [".all", ".first", ".one", ".one_or_none", ".scalar", ".scalars", ".paginate",
+             ".fetchall", ".fetchone", ".mappings", ".partitions"]
+    from_args: [any]
+    to: return
+  - id: sa-text
+    kind: call
+    callee: ["sqlalchemy.text", "text", ".literal_column", "sqlalchemy.literal_column"]
+    from_args: [any]
+    to: return
+
+sinks:
+  - id: sa-sql-exec
+    kind: call
+    callee: [".exec_driver_sql", ".execute", ".executemany"]
+    fqn_hint: [sqlalchemy]
+    taint_args: [0]
+    layers: [dangerous-sink]
+    cwe: CWE-89
+    severity: high

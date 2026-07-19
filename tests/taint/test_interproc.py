@@ -193,6 +193,38 @@ def test_adr007_library_object_external_and_constructor_bound() -> None:
     assert got.get("rows") == "external"     # method inherited from db.Model (library-backed base)
 
 
+def test_sqlalchemy_text_flows_to_execute() -> None:
+    # raw text() built from user input, then executed -> SQLi (the ORM raw-exec sink shape)
+    fs = _scan({
+        "app.py": (b"from flask import request\nfrom sqlalchemy import text\n"
+                   b"def q(session):\n"
+                   b"    session.execute(text('SELECT * WHERE id = ' + request.args['id']))\n"),
+    })
+    assert any(f.cwe == "CWE-89" for f in fs)
+
+
+def test_propagator_carries_receiver_taint() -> None:
+    # a query-builder terminal (.all) on a tainted receiver returns tainted (receiver-propagation)
+    fs = _scan({
+        "app.py": (b"from flask import request\nimport os\n"
+                   b"def q():\n    t = request.args['id']\n    rows = t.all()\n    os.system(rows)\n"),
+    })
+    assert any(f.sink_id == "py-os-command" for f in fs)
+
+
+def test_trr_metric_on_tiny() -> None:
+    from secgraph.callgraph import build_index, resolve_all_sites, trr
+    from secgraph.taint import run_project_full
+
+    modules = build_project_ir(TINY)
+    index = build_index(modules)
+    _sites, rows = resolve_all_sites(modules, index, {}, RULES)
+    _findings, tainted = run_project_full(modules, RULES)
+    t = trr(rows, tainted)
+    assert t["tainted_sites"] >= 1
+    assert t["TRR"] == 1.0   # run_query (bound) + conn.execute (rule) are both resolved
+
+
 def test_binding_rate_on_tiny() -> None:
     modules = build_project_ir(TINY)
     index = build_index(modules)

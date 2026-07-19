@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .engine import TaintCtx, expr_taint, run_function, run_function_inter, run_module
-from .interproc import run_project
+from .interproc import run_project, run_project_full
 from .model import EMPTY_SUMMARY, Finding, Origin, SinkPoint, Summary
 
 __all__ = [
@@ -16,6 +16,7 @@ __all__ = [
     "run_function_inter",
     "run_module",
     "run_project",
+    "run_project_full",
     "expr_taint",
     "scan_project",
     "TaintCtx",

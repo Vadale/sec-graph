@@ -11,6 +11,7 @@ from .resolve import (
     build_index,
     resolve_all_sites,
     site_key,
+    trr,
 )
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     "build_index",
     "resolve_all_sites",
     "binding_rate",
+    "trr",
     "site_key",
 ]

@@ -45,15 +45,20 @@ def scan(path: str) -> None:
 
 @app.command(name="callgraph-stats")
 def callgraph_stats(path: str) -> None:
-    """Measure call-site binding rate over PATH (the Phase-3 KILL-GATE metric)."""
-    from secgraph.callgraph import binding_rate, build_index, resolve_all_sites
+    """Measure call resolution over PATH (ADR-007 KILL-GATE metrics: PCR / UNK / TRR)."""
+    from secgraph.callgraph import binding_rate, build_index, resolve_all_sites, trr
     from secgraph.ir import build_project_ir
     from secgraph.rules import default_rules_dir, load_rules
+    from secgraph.taint import run_project_full
 
+    rules = load_rules(default_rules_dir())
     modules = build_project_ir(path)
     index = build_index(modules)
-    _sites, rows = resolve_all_sites(modules, index, {}, load_rules(default_rules_dir()))
+    _sites, rows = resolve_all_sites(modules, index, {}, rules)
     stats = binding_rate(rows)
+    _findings, tainted = run_project_full(modules, rules)
+    t = trr(rows, tainted)
+
     for cat in sorted(stats["counts"]):
         typer.echo(f"  {cat:18} {stats['counts'][cat]}")
     typer.echo(f"call sites: {stats['total']}  (method-call sites: {stats['method_sites']})")
@@ -64,6 +69,10 @@ def callgraph_stats(path: str) -> None:
     typer.echo(
         f"UNK (unknown-receiver / method sites): {stats['UNK']:.1%}  "
         f"[unknown-receiver={stats['unknown_receiver']}]"
+    )
+    typer.echo(
+        f"TRR (taint-relevant resolution): {t['TRR']:.1%}  "
+        f"[{t['resolved']}/{t['tainted_sites']} tainted-path sites resolved]"
     )
 
 

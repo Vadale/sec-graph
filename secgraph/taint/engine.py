@@ -106,10 +106,10 @@ def expr_taint(expr, state: State, ctx: TaintCtx) -> frozenset:
                 if "any" in prop.from_args
                 else [expr.args[i] for i in prop.from_args if isinstance(i, int) and i < len(expr.args)]
             )
-            out = frozenset()
+            out = set(expr_taint(expr.func, state, ctx))  # receiver taint (query-builder chains)
             for a in args:
                 out |= expr_taint(a, state, ctx)
-            return out
+            return frozenset(out)
         binding = ctx.sites.get(site_key(expr))
         if binding is not None:                       # RESOLVED call -> use summary (even if bottom)
             summ = ctx.summaries.get(binding.target, EMPTY_SUMMARY)
@@ -211,9 +211,9 @@ def _finding(fn, o: Origin, sp: SinkPoint) -> Finding:
     )
 
 
-def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary]:
-    """One taint run: returns (findings, this function's summary). With ``ctx.seed_params``
-    false and ``ctx.sites`` empty this reduces to intraprocedural taint."""
+def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary, set]:
+    """One taint run: returns (findings, this function's summary, tainted call sites). With
+    ``ctx.seed_params`` false and ``ctx.sites`` empty this reduces to intraprocedural taint."""
     if fn.cfg is None:
         analyze_function(fn)
     cfg = fn.cfg
@@ -256,6 +256,7 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary]:
     sink_params: set = set()
     return_params: set = set()
     return_origins: set = set()
+    tainted_sites: set = set()   # call sites with a tainted receiver/arg (for the TRR metric)
 
     def _emit(o: Origin, sp: SinkPoint, pidx_target: set) -> None:
         if o.param_index is not None:
@@ -288,6 +289,8 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary]:
                             sp2 = _lift(sp, binding.name, binding.provenance)
                             for o in expr_taint(e, state, wctx):
                                 _emit(o, sp2, sink_params)
+                if any(expr_taint(e, state, wctx) for e in (call.func, *call.args)):
+                    tainted_sites.add((fn.source_file, site_key(call)))   # TRR: on a tainted path
         if isinstance(stmt, Return) and stmt.value is not None:    # (C) return facts
             for o in expr_taint(stmt.value, IN[sid], wctx):
                 if o.param_index is not None:
@@ -296,7 +299,7 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary]:
                     return_origins.add(o if o.source_file else replace(o, source_file=fn.source_file))
 
     summary = Summary(frozenset(return_params), frozenset(return_origins), frozenset(sink_params))
-    return sorted(findings.values(), key=lambda f: f.key), summary
+    return sorted(findings.values(), key=lambda f: f.key), summary, tainted_sites
 
 
 def run_function(fn, imap: dict[str, str], rules: Rules) -> list[Finding]:

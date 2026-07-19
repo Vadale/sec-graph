@@ -70,7 +70,11 @@ def _summary_leq(old: Summary, new: Summary) -> bool:
             and old.sink_params <= new.sink_params)
 
 
-def run_project(modules: list[ModuleIR], rules: Rules, oracle: dict | None = None) -> list[Finding]:
+def run_project_full(
+    modules: list[ModuleIR], rules: Rules, oracle: dict | None = None,
+) -> tuple[list[Finding], set]:
+    """Interprocedural taint. Returns (findings, tainted call sites) -- the latter feeds the
+    TRR (taint-relevant resolution) metric in ``secgraph.callgraph``."""
     index = build_index(modules)
     sites, _rows = resolve_all_sites(modules, index, oracle or {}, rules)
     succ: dict[FnKey, list[FnKey]] = {
@@ -79,6 +83,7 @@ def run_project(modules: list[ModuleIR], rules: Rules, oracle: dict | None = Non
 
     summaries: dict[FnKey, Summary] = {}
     findings: dict[tuple, Finding] = {}
+    tainted_sites: set = set()
 
     for scc in tarjan_scc(sorted(index.fn_of), succ):
         for k in scc:
@@ -91,9 +96,10 @@ def run_project(modules: list[ModuleIR], rules: Rules, oracle: dict | None = Non
                 module = index.module_of[k[0]]
                 ctx = TaintCtx(imap=module.imports, rules=rules, summaries=summaries,
                                sites=sites.get(k, {}), seed_params=True)
-                fs, summ = run_function_inter(fn, ctx)
+                fs, summ, ts = run_function_inter(fn, ctx)
                 for f in fs:
                     findings.setdefault(f.key, f)
+                tainted_sites |= ts
                 assert _summary_leq(summaries[k], summ), f"non-monotone summary for {k} (bug)"
                 if summ != summaries[k]:
                     summaries[k] = summ
@@ -103,4 +109,8 @@ def run_project(modules: list[ModuleIR], rules: Rules, oracle: dict | None = Non
         else:
             raise AssertionError(f"SCC fixpoint exceeded cap ({cap}) for {scc} (bug)")
 
-    return sorted(findings.values(), key=lambda f: f.key)
+    return sorted(findings.values(), key=lambda f: f.key), tainted_sites
+
+
+def run_project(modules: list[ModuleIR], rules: Rules, oracle: dict | None = None) -> list[Finding]:
+    return run_project_full(modules, rules, oracle)[0]
