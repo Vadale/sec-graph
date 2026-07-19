@@ -57,8 +57,9 @@ def test_html_is_self_contained(tmp_path: Path) -> None:
     try:
         html = analyze_project(TINY, tmp_path / "out")["html"].read_text()
         assert "http://" not in html and "https://" not in html   # no external resources
-        assert 'id="layers"' in html and 'id="findings"' in html
-        assert "secgraph-data" in html                            # findings embedded as JSON
+        assert 'id="layers"' in html and 'id="map"' in html       # layer rail + graph canvas
+        assert "secgraph-graph" in html and "secgraph-findings" in html   # graph + findings embedded
+        assert "db_run_query" in html and "app_get_user" in html   # the graph nodes are in the map payload
     finally:
         _clean()
 
@@ -86,7 +87,7 @@ def test_render_html_neutralizes_script_data_breakout() -> None:
         "cwe": "CWE-89", "severity": "high", "layers": ["untrusted-input"], "confidence": "high",
         "trace": [], "source_slice": 'x = "<!--<script>alert(1)</script>-->"', "sink_slice": "",
     }
-    html = render_html([f], "root")
+    html = render_html({"nodes": [], "links": [], "hyperedges": []}, [f], "root")
     assert "<!--<script>" not in html and "</script>alert" not in html   # neutralized
     assert "\\u003c" in html                                             # escaped instead
-    assert "secgraph-data" in html and "function render" in html         # JS block intact
+    assert "secgraph-findings" in html and "getContext" in html          # data + canvas JS intact

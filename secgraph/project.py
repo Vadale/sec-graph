@@ -142,7 +142,8 @@ def analyze_project(path: Path | str, out_dir: Path | str = "graphify-out") -> d
         encoding="utf-8",
     )
     html_path = out_dir / "secgraph.html"
-    html_path.write_text(render_html(finding_dicts, str(path)), encoding="utf-8")
+    graph_data = json.loads(result.graph_json.read_text(encoding="utf-8"))   # the annotated graph
+    html_path.write_text(render_html(graph_data, finding_dicts, str(path)), encoding="utf-8")
 
     return {
         "findings": len(findings),

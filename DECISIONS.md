@@ -254,3 +254,29 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
 - **Rejected:** putting tool logic directly in the FastMCP handlers (untestable without the SDK,
   couples logic to transport); a name match for `get_function_taint` (the method FN); a
   cwd-relative `root` (breaks slicing when the harness launches `serve` from elsewhere).
+
+## ADR-012 — Hand-rolled Canvas graph viz (not a vis-network fork)
+- 2026-07-19 · Accepted (Phase 5; UI/UX consulted with a Fable 5 max agent) · **supersedes ROADMAP §12**
+- **Context:** ROADMAP §12 / pitfall #11 planned to *fork graphify's ~600-line vis-network HTML
+  template*. But the self-contained rule (strict CSP: no CDN, no external anything) means
+  vis-network would have to be **vendored inline (~700KB)** — a library dependency in the one file
+  that must have none. The user's Phase-5 brief also asked for an Obsidian/graphify-style **graph**,
+  not the current card list.
+- **Decision:** replace the card viz with a hand-rolled interactive node-link **map**, everything
+  (force layout + Canvas rendering + interactions) written in vanilla JS with **no library**, in a
+  `secgraph/viz/` package (`__init__.py` Python wrapper + `map.css` + `map.js` inlined at render).
+  Design (ADR consult): a **security-neighborhood default** (open on finding nodes + files + 1-hop,
+  full graph opt-in — never render the whole repo → no hairball); **Canvas 2D** (SVG folds at the
+  thousands-of-elements envelope; the Barnes-Hut quadtree doubles as the hit-test index); a **chroma
+  monopoly** — grayscale base, colour only for security (credentials/pii/untrusted source fills,
+  red sinks), **glow only for UNGUARDED**; a **"Critical" preset** = the §11 killer query
+  (credentials/pii ∩ unguarded) as one click; deterministic **seeded** layout (mulberry32⊕FNV, no
+  `Math.random`) so the emitted HTML stays byte-reproducible. The detail card reuses the old card +
+  a **"Copy MCP command"** button (`get_path_slice(id)`) — closing the map→LLM loop.
+- **Consequences:** no vis-network fork ⇒ **no NOTICE attribution** for it (graphify the library is
+  still attributed). `render_html(findings, root)` → `render_html(graph, findings, root)`.
+- **Deferred (Fable's post-cut-line):** file-collapse aggregation above ~1500 nodes, per-hop
+  intermediate route slices (needs hop `(file,line)`), 1-hop expansion on context nodes, PNG export.
+- **Rejected:** inlining vis-network/D3/cytoscape (violates self-containment); SVG (DOM-node blowup
+  at scale); rendering the full codebase by default (the hairball trap — the map would bury the
+  findings that are the entire point).

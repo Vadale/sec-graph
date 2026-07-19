@@ -1,10 +1,10 @@
 # HANDOFF — state for the next session
 
 ## Where we are
-Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 + Phase 6 (MCP) complete. 101 tests green**,
-quarantine wall intact, all reviewed by the `reviewer` agent and simplify-passed. **ROADMAP Phase 4
-(the layered map + layer-tagger) AND Phase 6 (the MCP triage server) are done** — the whole mission
-pipeline works end-to-end (map + LLM-triage-over-MCP). Dev env `.venv`
+Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 + Phase 6 (MCP) + Phase 5 (graph viz)
+complete. 101 tests green**, quarantine wall intact, all reviewed by the `reviewer` agent and
+simplify-passed. **Phases 4, 5, 6 are done** — the whole mission pipeline works end-to-end: the
+interactive layered graph map + LLM-triage-over-MCP. Dev env `.venv`
 (`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
 
 `secgraph analyze <path>` now produces the **three artifacts + the demo**:
@@ -42,24 +42,29 @@ findings with code slices + trace) · `secgraph.html` (self-contained layered ma
   never runs the engine/graphify/LLM. Tools: `list_paths`/`get_path_slice`(hash-verified minimal
   windows)/`find_unguarded_sinks`/`explain_layer`/`get_function_taint` + §15 defensive prompts.
   `taint.json` gained `id`/`file_hashes`/`source_node`/`sink_node`/absolute `root` (ADR-011).
+- **Phase 5 (interactive graph map)**: `secgraph/viz/` package (`__init__.py` + `map.css` + `map.js`).
+  A hand-rolled, self-contained, deterministic force-directed node-link map on Canvas (ADR-012,
+  supersedes §12's vis-network fork). Security-neighborhood default, chroma=security / glow=unguarded,
+  "Critical" preset (§11 killer query), focus/dim a path, detail card + Copy-MCP. `render_html` now
+  takes `(graph, findings, root)`.
 
-See `diary/2026-07-19-12-mcp.md` (Phase 6), `-11-wpc2.md`, `-10-wpc1.md`, `-09-wpb.md`, `-06-killgate.md`.
+See `diary/2026-07-19-13-viz.md` (Phase 5), `-12-mcp.md`, `-11-wpc2.md`, `-10-wpc1.md`, `-06-killgate.md`.
 
 ## Decisions locked
-`DECISIONS.md` ADR-000..011 (008 = structural projection joins; 009 = sensitive-data layers via
-Origin mint; 010 = auth barriers + unguarded sinks; 011 = MCP thin-wrapper-over-pure-view).
+`DECISIONS.md` ADR-000..012 (009 = sensitive-data layers via Origin mint; 010 = auth barriers +
+unguarded; 011 = MCP thin-wrapper-over-pure-view; 012 = hand-rolled Canvas graph viz, no library).
 
-## Next session — pick one
-### A. Phase 5 — visualization polish
-The HTML map is functional (layer toggles, railway cards, UNGUARDED badge) but plain. Phase 5 is the
-"Google-Maps" UX pass: better layout/graph rendering, node-level navigation, path highlighting.
-
-### B. Resolver precision — Tier-3 annotation typing (fastapi UNK/TRR mover)
+## Next session — pick one  (Alessandro's order: B then C)
+### B. Resolver precision — Tier-3 annotation typing (fastapi UNK/TRR mover)  ← next
 `def f(u: User)` param-annotation typing raises binding on annotation-saturated DI code
-(fastapi-realworld was UNK 50.8% / TRR 52.7%). Pure analysis, no new deps. Then **H2** field-sensitivity.
+(fastapi-realworld was UNK 50.8% / TRR 52.7%). Read a param's annotation, type its receiver, resolve
+its method calls. Pure analysis in `secgraph/callgraph` + `ir`, no new deps. Then **H2**
+field-sensitivity (`self.x = tainted` laundering).
 
 ### C. Phase 8 — packaging
-Package `rules/` as importlib data; a `pip install`-able wheel; CI publish.
+Package `rules/` **and the `viz/` map.css/map.js assets** as importlib package data (they're read
+from `__file__`-relative paths today — fine for the editable dev install, must become
+`importlib.resources` for a wheel); a `pip install`-able wheel; CI publish.
 
 ### C. Resolver/summary precision (lower priority)
 - **Tier-3 annotation typing** (`def f(u: User)`) — the fastapi UNK/TRR mover (deferred; Fable
