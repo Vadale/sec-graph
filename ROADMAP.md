@@ -878,29 +878,61 @@ pytest -q                                            # → 121 passed
 
 ### Phase 12 — Benchmark: does the map + MCP help triage?  *(OSS release, part 2 — ADR-015)*
 
-The **non-circular control-vs-treatment** study. Design consulted with a **Fable 5 max** agent
-before locking. sec-graph does not *find* vulns; it makes triage of a SAST's findings better —
-measure that delta honestly, with the limits.
+The **non-circular control-vs-treatment** study. **Protocol locked by a Fable 5 max review**
+(2026-07-19) — the binding spec is `benchmark/PROTOCOL.md` (git-dated pre-registration); this is a
+summary. sec-graph does not *find* vulns; it makes triage of an existing SAST's findings better —
+measure that delta honestly, LLM-only (**no human arm** — argued qualitatively + future work), with
+the limits. Model = `gemma4:e4b-it-qat` (one Claude-Code Haiku data point optional, anecdotal).
 
-- **Corpus** `benchmark/corpus/`: PyGoat + 2–3 deliberately-vulnerable Python apps (+ optional
-  real CVE commits), each with a **hand-labelled** `truth.json` (per finding: real/FP, guard
-  state, severity, vuln class). Ground truth is ours, **not** the engine's CWE (anti-circular).
-- **Arms** on the SAME findings: **A** = LLM triages raw SAST output (SARIF text / whole-file
-  context); **B** = LLM triages via the sec-graph MCP (enriched layers, unguarded verdict,
-  minimal hash-verified slices, prioritized order). Local model `gemma4:e4b-it-qat` (Claude-Code
-  Haiku only if needed).
-- **Metrics:** class accuracy, exploitability recall, **prioritization** (rank/time-to-first-
-  critical), tokens, wall-time. Plus a **modest human arm** (small timed task, caveated).
-  Reproducible `benchmark/run.py` + `BENCHMARK.md` with the A/B delta and a
-  "when it helps / when it does not" table.
+- **Corpus** (freeze a sec-graph tag before first contact with the unseen repos): **PyGoat = the
+  development corpus** (rules/dicts/prompt were tuned on it → results split **dev vs unseen**);
+  **django.nV** (Django `@login_required` → real auth tiers) and **Vulpy** (Flask, ships `bad/` +
+  `good/` → the **FP mass** an all-real corpus lacks) as the unseen repos. Selection is by
+  pre-declared criteria (deliberately-vulnerable Python web app, ≥25 CodeQL findings, real auth
+  code, unused in dev), not by name; swap if a candidate yields <25.
+- **`truth.json`** keyed on **SARIF identity** (rule_id, file, line, fingerprint, ordinal) — never
+  sec-graph path ids (else undefinable without running the tool = circular). Per finding: real/FP,
+  vuln_class (the 15-item output taxonomy), guard (guarded|unguarded|n/a) **with a mandatory code
+  citation**, severity (4-line rubric). Labelled **blind to sec-graph outputs** (taint.json/map/MCP
+  forbidden); committed **before** any A/B run; second-pass reliability + adjudication log.
+- **Arms** (same model/seed/decoding/`num_ctx`/prompt-skeleton/findings; one call per finding;
+  intent-to-treat denominators — an ingest/bind/parse/ctx-cap failure scores that arm wrong, never
+  a silent drop): **A** (control) = rendered SARIF fields + **full numbered text of every flow
+  file** (the steelman superset — if B wins it cannot be for lack of info); **B** (treatment) =
+  exactly the real MCP payload (`list_paths` summary + `get_path_slice` ±3-line windows +
+  layers/unguarded/guards); **C** (ablation) = B's slices with enrichment stripped (isolates
+  minimal-slices vs enrichment). `num_ctx` raised to 16384 for **both** arms (host feasibility
+  check first; pre-declared 8192 + cap-and-count fallback; assert prompt < 0.9·ctx, verify
+  `prompt_eval_count`).
+- **Metrics.** Primary endpoint (declared in advance): **paired real/FP accuracy, exact McNemar**.
+  Secondary (bootstrap 95% CIs only, no p-values): guard_acc, class_acc (near-ceiling in
+  product-faithful mode — flagged; informative only in the blind-class condition), severity
+  exact/±1, tokens, wall-time. **Prioritization** is deterministic over orderings: **O2** =
+  severity-sorted raw SARIF (the real baseline — *not* O1 file-order) vs **O3** = sec-graph
+  `list_paths` `_rank`; report rank-of-first-critical, precision@{5,10}, and cost-to-first-
+  confirmed-critical (**B@O3 vs A@O2**, decomposed so ordering vs payload-size vs correctness do not
+  double-count). Plus a **tool self-audit** (sec-graph's own guard-verdict error rate vs truth,
+  binding coverage) published next to the arms.
+- **Honesty rails:** schema-constrained JSON both arms, **mechanical exact-taxonomy scorer** (the
+  Part-2 keyword scorer must NOT survive); prompts + scorer published verbatim; duplicate the full
+  sweep for decode variance; every claim model/repo/language/task-scoped. Deliverable: reproducible
+  `benchmark/{PROTOCOL.md, corpus/<repo>/{truth.json,codeql.sarif}, skeleton.py, arms.py, triage.py,
+  rank.py, score.py, run.py}` + `BENCHMARK.md` (generated tables + hand-written claims + the
+  "when it helps / when it does not" table). Full doubled sweep ≈ 2–4 h wall-clock (Arm-A prefill on
+  large files dominates).
 
-> **Build Prompt — Phase 12:** "After a Fable 5 max design review, build `benchmark/`: the
-> labelled-corpus loader, the two triage arms (raw vs MCP) over one shared finding set per repo,
-> the scorer against `truth.json`, and a deterministic report. Seed from the Part-2 harness
-> (`mcp_pull`/`gemma_triage`/`score`). No overclaiming: numbers executed, limits explicit."
+> **Build Prompt — Phase 12:** "Write `benchmark/PROTOCOL.md` first (pre-registration). Build the
+> harness seeded from `scratchpad/{mcp_pull,gemma_triage,score}.py`: `skeleton.py` (truth skeleton
+> from SARIF identity), `arms.py` (A whole-file / B real-MCP-client / C ablation renderers),
+> `triage.py` (shared skeleton + decoding + token/time capture), `rank.py` (O2/O3 deterministic),
+> `score.py` (exact-taxonomy + McNemar + bootstrap, NO keyword matching), `run.py` (manifest: model
+> digest, ollama version, secgraph tag, SARIF sha256, seed). Commit truth.json before runs. No
+> engine-CWE in scoring; no sec-graph ids as truth keys; no unscoped claims."
 
-**Acceptance:** `python benchmark/run.py` reproduces the `BENCHMARK.md` numbers; the A/B delta and
-the limits table are present; corpus labels are hand-written, version-controlled files.
+**Acceptance:** `python benchmark/run.py` reproduces `BENCHMARK.md`; the primary endpoint has a
+McNemar result + CI, everything else CIs; O2-vs-O3 prioritization present; the tool self-audit and the
+limits table present; `truth.json` committed before the run commits (git history shows the order);
+corpus labels are hand-written, citation-backed, version-controlled files.
 
 ### Phase 13 — Documentation for release  *(OSS release, part 3 — ADR-015)*
 

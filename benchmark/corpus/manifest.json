@@ -1,0 +1,52 @@
+{
+  "codeql_version": "2.26.1",
+  "suite": "codeql/python-queries:codeql-suites/python-security-extended.qls",
+  "selection_criteria": "deliberately-vulnerable Python web app; CodeQL security-extended finding count with class variety; real auth code; PyGoat flagged development corpus (rules/dicts/prompt tuned on it).",
+  "survey": [
+    {
+      "repo": "pygoat",
+      "role": "development",
+      "url": "https://github.com/adeyosemanputra/pygoat",
+      "findings": 40,
+      "included": true
+    },
+    {
+      "repo": "vulpy",
+      "role": "unseen",
+      "url": "https://github.com/fportantier/vulpy",
+      "commit": "5249cc8",
+      "findings": 17,
+      "included": true,
+      "note": "ships bad/ and good/ trees -> FP mass"
+    },
+    {
+      "repo": "vulnerable-flask-app",
+      "role": "unseen",
+      "url": "https://github.com/we45/Vulnerable-Flask-App",
+      "commit": "b6a4f97",
+      "findings": 9,
+      "included": true
+    },
+    {
+      "repo": "django.nV",
+      "url": "https://github.com/nVisium/django.nV",
+      "commit": "a48901f",
+      "findings": 0,
+      "included": false,
+      "reason": "0 CodeQL findings (Django template/ORM vulns not modelled by default queries)"
+    },
+    {
+      "repo": "dvpwa",
+      "url": "https://github.com/anxolerd/dvpwa",
+      "commit": "a1d8f89",
+      "findings": 1,
+      "included": false,
+      "reason": "only 1 finding (<threshold)"
+    }
+  ],
+  "sarif_sha256": {
+    "pygoat": "sha256:7e8723f78ca4f8a885507eb78c3424cdb369fc326de8dfef81f3d385d9a7b859",
+    "vulpy": "sha256:097335e65b42b1f324f79b021892a67e46e2e901714b8b383fda7a1f5b3af05b",
+    "vulnerable-flask-app": "sha256:f58ed69ec2197cad6b1a1c368f6048ad0a90143db0836af14cdf788c271758f3"
+  }
+}
