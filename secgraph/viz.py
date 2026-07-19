@@ -33,6 +33,7 @@ main{flex:1;padding:20px 24px;min-width:0}
 .card .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .sev{font-size:11px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:6px;color:#fff}
 .sev.critical{background:#c1121f} .sev.high{background:#d1495b} .sev.medium{background:#c98a1e} .sev.low{background:#5a7d9a}
+.sev.unguarded{background:#9d174d} .chip.guard{background:#123f2a;color:#8fe3b0;border-color:#1c5c3e}
 .cwe{font-weight:600} .conf{color:var(--muted);font-size:12px;margin-left:auto}
 .rail{display:flex;align-items:center;gap:10px;margin:14px 0 6px;flex-wrap:wrap}
 .node{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:8px 11px;min-width:0}
@@ -88,7 +89,9 @@ function render() {
     const sev = document.createElement('span'); sev.className='sev '+f.severity; sev.textContent=f.severity;
     const cwe = document.createElement('span'); cwe.className='cwe'; cwe.textContent=(f.cwe?f.cwe+' ':'')+f.source_id+' → '+f.sink_id;
     const conf = document.createElement('span'); conf.className='conf'; conf.textContent='confidence: '+f.confidence;
-    top.append(sev, cwe, conf); c.append(top);
+    top.append(sev, cwe);
+    if (f.unguarded) { const u=document.createElement('span'); u.className='sev unguarded'; u.textContent='UNGUARDED'; top.append(u); }
+    top.append(conf); c.append(top);
     const rail = document.createElement('div'); rail.className='rail';
     const a = document.createElement('span'); a.className='arrow'; a.textContent='→';
     rail.append(node('source', f.source_file, f.source_line, f.function), a,
@@ -98,7 +101,9 @@ function render() {
       tr.textContent='trace: '+f.trace.join(' → '); c.append(tr); }
     for (const s of [f.source_slice, f.sink_slice]) { if (s){ const p=document.createElement('pre'); p.textContent=s; c.append(p);} }
     const chips=document.createElement('div'); chips.className='chips';
-    for (const L of f.layers){ const ch=document.createElement('span'); ch.className='chip'; ch.textContent=L; chips.append(ch);} c.append(chips);
+    for (const L of f.layers){ const ch=document.createElement('span'); ch.className='chip'; ch.textContent=L; chips.append(ch);}
+    if (f.guards && f.guards.length){ const g=document.createElement('span'); g.className='chip guard'; g.textContent='guarded by: '+f.guards.join(', '); chips.append(g);}
+    c.append(chips);
     main.append(c);
   }
 }

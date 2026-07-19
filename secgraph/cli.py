@@ -22,7 +22,7 @@ def analyze(path: str, out_dir: str = "graphify-out") -> None:
 
     typer.echo(f"Wrote {r['graph_json']}")
     typer.echo(f"      {r['taint_json']}")
-    typer.echo(f"      {r['html']}   ({r['findings']} finding(s))")
+    typer.echo(f"      {r['html']}   ({r['findings']} finding(s), {r['unguarded']} unguarded)")
 
 
 @app.command()

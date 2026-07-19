@@ -458,6 +458,35 @@ def _has_field_escape(fn_node) -> bool:
     return False
 
 
+def _decorator_name(node) -> Optional[str]:
+    """The last-component name of a decorator expression: ``@login_required`` -> ``login_required``,
+    ``@auth.login_required`` -> ``login_required``, ``@roles_required('admin')`` -> ``roles_required``."""
+    if node is None:
+        return None
+    if node.type == "identifier":
+        return _text(node)
+    if node.type == "attribute":
+        attr = node.child_by_field_name("attribute")
+        return _text(attr) if attr is not None else None
+    if node.type == "call":
+        return _decorator_name(node.child_by_field_name("function"))
+    return None
+
+
+def _decorator_names(fn_node) -> tuple[str, ...]:
+    parent = fn_node.parent
+    if parent is None or parent.type != "decorated_definition":
+        return ()
+    names: list[str] = []
+    for c in parent.named_children:
+        if c.type == "decorator":
+            inner = next((d for d in c.named_children if d.type != "comment"), None)
+            name = _decorator_name(inner)
+            if name:
+                names.append(name)
+    return tuple(names)
+
+
 def _lower_function(fn, source_file: str) -> FunctionIR:
     name_node = fn.child_by_field_name("name")
     params = _param_names(fn.child_by_field_name("parameters"))
@@ -471,6 +500,7 @@ def _lower_function(fn, source_file: str) -> FunctionIR:
         span=Span.of(fn),
         source_file=source_file,
         field_escape=_has_field_escape(fn),
+        decorators=_decorator_names(fn),
     )
 
 

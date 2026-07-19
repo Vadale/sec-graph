@@ -241,6 +241,7 @@ class FunctionIR:
     source_file: str
     enclosing_class: Optional[str] = None  # set for methods (excluded from the module FQN index)
     field_escape: bool = False             # writes an arg to self.x / d[k] (an untracked channel)
+    decorators: tuple[str, ...] = ()       # decorator names (last component), for auth-barrier detection
     graphify_node: Optional[str] = None    # filled by secgraph.ir.join
     cfg: Optional[CFG] = None
     defuse: Optional[DefUse] = None

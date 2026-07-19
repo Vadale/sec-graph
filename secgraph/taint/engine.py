@@ -37,7 +37,8 @@ from ..ir.model import (
 from ..rules.labels import classify_secret, ident_label
 from ..rules.match import match_propagator, match_sanitizer, match_sink, match_source
 from ..rules.model import Rules
-from .model import EMPTY_SUMMARY, Finding, Origin, SinkPoint, Summary
+from .guards import guard_map
+from .model import EMPTY_SUMMARY, Finding, Origin, SinkPoint, Summary, merge_finding
 
 State = dict[str, frozenset]  # var name -> frozenset[Origin]
 
@@ -51,7 +52,7 @@ def _min_conf(a: str, b: str) -> str:
 def _sink_param_key(item):
     """Total order for (param_index, SinkPoint) tuples (SinkPoint isn't orderable)."""
     i, sp = item
-    return (i, sp.sink_id, sp.file, sp.function, sp.line, sp.via)
+    return (i, sp.sink_id, sp.file, sp.function, sp.line, sp.via, sp.guards)
 
 
 def _ident_origin(name: str, span, ctx: "TaintCtx"):
@@ -222,10 +223,18 @@ def _merge(states: list[State]) -> State:
     return out
 
 
-def _lift(sp: SinkPoint, callee: str, provenance: str) -> SinkPoint:
+def _lift(sp: SinkPoint, callee: str, provenance: str, call_guards: tuple = ()) -> SinkPoint:
     via = sp.via if (callee in sp.via or len(sp.via) >= 8) else (callee, *sp.via)
     conf = _min_conf(sp.confidence, "medium") if provenance == "oracle" else sp.confidence
-    return replace(sp, via=via, confidence=conf)
+    guards = tuple(sorted(set(sp.guards) | set(call_guards)))  # barriers accumulate down the call path
+    return replace(sp, via=via, confidence=conf, guards=guards)
+
+
+def find_unguarded_sinks(findings: list[Finding]) -> list[Finding]:
+    """Findings whose sink has no auth barrier detected on the analyzed path (the flagship
+    derived finding). NB: 'on the path' -- a barrier on an un-analyzed entrypoint above the
+    source is not seen (honest under-claim; entrypoint-scope guards are a later phase)."""
+    return [f for f in findings if not f.guards]
 
 
 def _finding(fn, o: Origin, sp: SinkPoint) -> Finding:
@@ -246,6 +255,7 @@ def _finding(fn, o: Origin, sp: SinkPoint) -> Finding:
         sink_file=sp.file,
         sink_function=sp.function,
         trace=trace,
+        guards=sp.guards,
     )
 
 
@@ -266,6 +276,7 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary, set]:
         # untainted local looks "unbound", so the Name branch would otherwise reach ctx.constants)
         constants={k: v for k, v in ctx.constants.items() if k not in local_names},
     )
+    guards = guard_map(fn, wctx.imap, wctx.rules)   # sid -> auth barriers in scope (structural)
 
     seed: State = {}
     if ctx.seed_params:
@@ -310,8 +321,7 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary, set]:
         if o.param_index is not None:
             pidx_target.add((o.param_index, sp))
         else:
-            f = _finding(fn, o, sp)
-            findings.setdefault(f.key, f)
+            merge_finding(findings, _finding(fn, o, sp))
 
     for sid, stmt in cfg.stmt_of.items():
         state = IN[sid]
@@ -320,7 +330,8 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary, set]:
                 sink = match_sink(call, wctx.imap, wctx.rules)
                 if sink is not None:                      # (A) a rule sink in THIS function
                     sp = SinkPoint(sink.id, sink.cwe, sink.severity, sink.layers,
-                                   sink.confidence, fn.source_file, fn.name, call.span.start_line)
+                                   sink.confidence, fn.source_file, fn.name, call.span.start_line,
+                                   guards=guards.get(sid, ()))
                     for i in sink.taint_args:
                         if i < len(call.args):
                             for o in expr_taint(call.args[i], state, wctx):
@@ -334,7 +345,7 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary, set]:
                     for p, sp in summ_sinks:
                         e = _param_expr(call, binding, p)
                         if e is not None:
-                            sp2 = _lift(sp, binding.name, binding.provenance)
+                            sp2 = _lift(sp, binding.name, binding.provenance, guards.get(sid, ()))
                             for o in expr_taint(e, state, wctx):
                                 _emit(o, sp2, sink_params)
                 if any(expr_taint(e, state, wctx) for e in (call.func, *call.args)):

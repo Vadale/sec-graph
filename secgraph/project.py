@@ -40,6 +40,7 @@ def _finding_dict(f: Finding, root: Path) -> dict:
         "sink_function": f.sink_function,
         "cwe": f.cwe, "severity": f.severity, "layers": list(f.layers), "confidence": f.confidence,
         "trace": list(f.trace),
+        "guards": list(f.guards), "unguarded": not f.guards,   # unguarded = no auth barrier on the path
         "source_slice": _read_slice(root, f.source_file, f.source_line),
         "sink_slice": _read_slice(root, sink_file, f.sink_line),
     }
@@ -122,6 +123,7 @@ def analyze_project(path: Path | str, out_dir: Path | str = "graphify-out") -> d
 
     return {
         "findings": len(findings),
+        "unguarded": sum(1 for f in findings if not f.guards),
         "graph_json": result.graph_json,
         "taint_json": taint_json,
         "html": html_path,

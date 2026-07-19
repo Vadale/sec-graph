@@ -50,3 +50,38 @@ labels:
       - street_address
       - home_address
       - billing_address
+
+# Auth-barrier vocabulary for unguarded-sink detection (WP-C2). A dangerous sink with none of
+# these dominating it on the analyzed path is reported as UNGUARDED.
+barriers:
+  decorators:                        # function-entry guards
+    - login_required
+    - permission_required
+    - admin_required
+    - requires_auth
+    - auth_required
+    - jwt_required
+    - roles_required
+    - roles_accepted
+    - staff_member_required
+  callables:                         # dominating guard calls (require_admin(); ...)
+    - authorize
+    - require_admin
+    - require_login
+    - check_permission
+    - verify_token
+    - ensure_authenticated
+  test_attrs:                        # auth conditions (if not current_user.is_admin: ...)
+    - is_authenticated
+    - is_admin
+    - is_staff
+    - is_superuser
+    - has_role
+    - has_permission
+    - has_perm
+  aborts:                            # calls that terminate the block (raise / exit)
+    - abort
+    - flask.abort
+    - sys.exit
+    # NB: a bare `HttpResponseForbidden(...)` does NOT terminate (it must be returned); the
+    # realistic `return HttpResponseForbidden(...)` is already caught by the Return branch.

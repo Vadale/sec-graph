@@ -1,7 +1,7 @@
 """Taint origins, function summaries, and findings for the taint pass."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from ..ir.model import Span
@@ -34,6 +34,7 @@ class SinkPoint:
     function: str
     line: int
     via: tuple[str, ...] = ()
+    guards: tuple[str, ...] = ()   # auth barriers dominating this sink on the path (empty = unguarded)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,10 +71,27 @@ class Finding:
     sink_file: str = ""
     sink_function: str = ""
     trace: tuple[str, ...] = ()
+    guards: tuple[str, ...] = ()   # auth barriers on the path; empty => an UNGUARDED sink
 
     @property
     def key(self) -> tuple:
+        # guards are deliberately excluded: two path variants with the same source->sink but
+        # different guards share a key and merge by guard INTERSECTION (guarded only if every
+        # observed path is guarded -- the sound direction for the unguarded claim).
         return (
             self.source_file, self.function, self.source_id, self.source_line,
             self.sink_id, self.sink_line, self.sink_file,
         )
+
+
+def merge_finding(findings: dict, f: Finding) -> None:
+    """Insert ``f`` under ``f.key`` into ``findings``; if a variant with the same key is already
+    present, keep the guard INTERSECTION (see ``Finding.key``: a sink counts as guarded only if
+    EVERY observed path guards it -- the sound direction for the unguarded claim; a keep-first
+    merge would freeze an early guarded verdict over a later unguarded one). Shared by the intra
+    scan (``engine``) and the interprocedural fixpoint driver (``interproc``)."""
+    old = findings.get(f.key)
+    if old is None:
+        findings[f.key] = f
+    elif old.guards != f.guards:
+        findings[f.key] = replace(old, guards=tuple(sorted(set(old.guards) & set(f.guards))))

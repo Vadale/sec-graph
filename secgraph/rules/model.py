@@ -85,6 +85,17 @@ class SecretConfig:
     confidence: str = "medium"             # entropy-fallback confidence
 
 
+@dataclass(frozen=True, slots=True)
+class BarrierRule:
+    """Auth-barrier vocabulary for unguarded-sink detection: guard decorators, guard callables,
+    auth-test attributes (``current_user.is_admin``), and terminating aborts (``abort(403)``)."""
+
+    decorators: tuple[str, ...] = ()
+    callables: tuple[str, ...] = ()
+    test_attrs: tuple[str, ...] = ()
+    aborts: tuple[str, ...] = ()
+
+
 @dataclass(slots=True)
 class Rules:
     """Aggregated rules from one or more packs."""
@@ -95,6 +106,7 @@ class Rules:
     propagators: list[PropagatorRule] = field(default_factory=list)
     labels: dict[str, LabelRule] = field(default_factory=dict)   # layer -> identifier dict
     secrets: Optional[SecretConfig] = None
+    barriers: BarrierRule = field(default_factory=BarrierRule)
 
     def extend(self, other: "Rules") -> "Rules":
         self.sources.extend(other.sources)
@@ -104,4 +116,11 @@ class Rules:
         self.labels.update(other.labels)
         if other.secrets is not None:
             self.secrets = other.secrets
+        u = lambda a, b: tuple(dict.fromkeys(a + b))   # union, order-preserving  # noqa: E731
+        self.barriers = BarrierRule(
+            u(self.barriers.decorators, other.barriers.decorators),
+            u(self.barriers.callables, other.barriers.callables),
+            u(self.barriers.test_attrs, other.barriers.test_attrs),
+            u(self.barriers.aborts, other.barriers.aborts),
+        )
         return self

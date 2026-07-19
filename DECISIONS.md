@@ -187,3 +187,39 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
 - **Rejected:** IR-node bitmask (invasive, re-plumbed by field-sensitivity); post-hoc lexical
   finding enrichment (presence-in-function ≠ on the tainted value → the flagship degrades to grep);
   mutating origins in flight (breaks the two guarantees above).
+
+## ADR-010 — Auth barriers + the unguarded-sink finding (structural, polarity-sound)
+- 2026-07-19 · Accepted (WP-C2; design consulted with a Fable 5 max agent, reviewer-hardened)
+- **Context:** ROADMAP §11's flagship derived finding is the **unguarded sink** — a dangerous sink
+  with no auth barrier dominating it on the path. The governing constraint is asymmetric: a false
+  "guarded" **hides** an unguarded sink (a security false negative), while a false "unguarded" only
+  over-reports. So detection must **never credit a guard it cannot prove**.
+- **Decision (detection is structural on the IR, not CFG dominators):** `guard_map(fn, imap, rules)`
+  returns, per statement sid, the auth guards in scope, from three detectors: **B1** function
+  decorators (`@login_required`); **B2** a statement in an `if` arm the auth condition dominates;
+  **B3** a statement after an auth gate whose *failure* arm terminates (`if not authed: abort()`).
+  B2/B3 are unified by a **polarity analysis**: `_true_guards`/`_false_guards` compute the auth
+  terms guaranteed true when a test is truthy/falsy, threading `and`/`or`/`not` by De Morgan. An
+  auth term under an `or`, inside a comparison, or as a call argument credits nothing (safe
+  under-claim). The `if` model already carries `body`/`orelse`, so no separate dominator pass is
+  needed.
+- **Decision (guards ride the value's sink, accumulate, and merge by intersection):**
+  `SinkPoint.guards` → `Finding.guards`; `_lift` **unions** the call-site guards when a callee's
+  sink is lifted across a hop (barriers accumulate down the path); on a `Finding.key` collision
+  (two path variants) guards **intersect** — guarded only if *every* observed path is (the sound
+  direction). The intersection runs both intra-run (`engine._emit`) and **across fixpoint
+  iterations** (`interproc`, not `setdefault`). `unguarded` is **derived** (`guards == ()`), never
+  stored; `find_unguarded_sinks` is a filter. `guard_map` is purely structural, so guards can't
+  change across the fixpoint and summary monotonicity holds; `_sink_param_key` includes guards for a
+  total order.
+- **Honesty:** the claim is "no auth barrier detected **on the analyzed path**." A barrier on an
+  un-analyzed entrypoint above the source is not seen (safe under-claim). Reviewer found and we
+  fixed two ship-blocking FNs before commit: a compound-boolean bypass (`if authed or debug:` →
+  falsely guarded) and an SCC keep-first merge that froze an early "guarded" verdict over a later
+  unguarded path.
+- **Scope / deferred:** FastAPI `Depends(get_current_user)` barriers and entrypoint→source
+  barrier reachability (Phase 7); a shadowed local `abort` spoofing termination; the merged-variant
+  determinism nit (guards stay deterministic; a colliding non-guard field could differ — cosmetic).
+- **Rejected:** first-match/substring auth detection (the compound-boolean FN); CFG statement
+  dominators (the structural IR walk is simpler and sufficient); storing `unguarded` (derive it, so
+  it can't drift from `guards`).

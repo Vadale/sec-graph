@@ -1,9 +1,10 @@
 # HANDOFF — state for the next session
 
 ## Where we are
-Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 complete. 83 tests green**, quarantine wall intact,
-all reviewed by the `reviewer` agent and simplify-passed. Dev env `.venv`
-(`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
+Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 complete. 92 tests green**, quarantine wall
+intact, all reviewed by the `reviewer` agent and simplify-passed. **ROADMAP Phase 4 (the layered
+map + layer-tagger) is fully done.** Dev env `.venv` (`uv pip install -e ".[dev]"`),
+`graphifyy==0.9.6`.
 
 `secgraph analyze <path>` now produces the **three artifacts + the demo**:
 `graph.json` (graphify's entity graph, coarsely annotated) · `taint.json` (fine, statement-level
@@ -29,27 +30,25 @@ findings with code slices + trace) · `secgraph.html` (self-contained layered ma
   (named regexes → gated entropy). Flagship works: `credentials + dangerous-sink` findings. Also
   fixed the **f-string taint FN** (`execute(f"…{q}")` now CWE-89). Layers are already rendered as
   toggles by the WP-B viz.
+- **WP-C2 (layer-tagger, auth/unguarded half)**: `secgraph/taint/guards.py` + `rules/labels.yml`
+  barriers. `guard_map` detects auth barriers structurally (B1 decorators, B2 authorised arm, B3
+  terminating gate), unified by a **polarity-sound** `_true_guards`/`_false_guards` (never falsely
+  "guarded" — ADR-010). `SinkPoint.guards`/`Finding.guards` accumulate down the call path (`_lift`
+  union) and merge by **intersection** on key collision (intra-run + across fixpoint iterations).
+  `find_unguarded_sinks` + viz UNGUARDED badge + CLI unguarded count. **Phase 4 is now complete.**
 
-See `diary/2026-07-19-10-wpc1.md` (WP-C1), `-09-wpb.md`, `-08-wpa.md`, `-06-killgate.md`, `-05-wp3.md`.
+See `diary/2026-07-19-11-wpc2.md` (WP-C2), `-10-wpc1.md`, `-09-wpb.md`, `-08-wpa.md`, `-06-killgate.md`.
 
 ## Decisions locked
-`DECISIONS.md` ADR-000..009 (008 = structural projection joins + script-data-safe viz; 009 =
-sensitive-data layers via Origin mint, word-based matching, f-string fix).
+`DECISIONS.md` ADR-000..010 (008 = structural projection joins; 009 = sensitive-data layers via
+Origin mint; 010 = auth barriers + unguarded sinks, structural + polarity-sound).
 
 ## Next session — pick one
-### A. WP-C2 — auth/permissions layer + unguarded sinks (finishes the layer-tagger)
-The other half of ROADMAP Phase 4: `FunctionIR.decorators` (harvest in `lower.py`), auth-barrier
-detection (decorator dict `@login_required`/`Depends`, in-arm `if user.is_admin:`, dominating gate
-`if not authed: abort()` via new `dominators()` in `ir/cfg.py`), `SinkPoint.guards`/`Finding.guards`
-threaded through summaries (intersection-merge on key collision), and `find_unguarded_sinks` (a
-dangerous sink with no barrier on the path) surfaced in the CLI + viz unguarded badge. Adds the
-`auth` layer + the flagship *unguarded sink* finding. Deferred bits: FastAPI `Depends` barriers,
-entrypoint-scope guard reachability (Phase 7).
-
-### B. MCP server (Phase 6)
-`secgraph serve` (currently `NotImplementedError`): expose isolated `taint.json` paths to an LLM
-harness for triage, run alongside `graphify --mcp`. The taint.json schema (finding + slices +
-trace) is the payload; keep the analysis core LLM-free (ADR-000).
+### A. MCP server (Phase 6) — the last core piece of the mission
+`secgraph serve` (currently `NotImplementedError`): expose isolated `taint.json` paths — now
+including `guards` + the `unguarded` flag + layers + slices + trace — to an LLM harness for triage,
+run alongside `graphify --mcp`. Keep the analysis core LLM-free (ADR-000). This closes the
+"hand isolated paths to an LLM over MCP" half of the mission.
 
 ### C. Resolver/summary precision (lower priority)
 - **Tier-3 annotation typing** (`def f(u: User)`) — the fastapi UNK/TRR mover (deferred; Fable
@@ -66,6 +65,10 @@ trace) is the payload; keep the analysis core LLM-free (ADR-000).
   intended test-path confidence downgrade (detect-don't-hide) is a small follow-up (thread
   `fn.source_file` into `classify_secret`). **Cross-module imported-constant** secrets
   (`from settings import SECRET_KEY`) are missed (degrades safely).
+- **Auth barriers (WP-C2) deferred**: FastAPI `Depends(get_current_user)` barriers + entrypoint→
+  source barrier reachability (a helper reached only from a `@login_required` route reads as
+  unguarded — honest under-claim, Phase 7); a shadowed local `abort` could spoof termination; the
+  merged-variant determinism nit (guards stay deterministic; a colliding non-guard field could differ).
 - **`binding_rate`** excludes module-level call sites (documented under-count).
 - **Phase 8:** package `rules/` as importlib data for a wheel.
 
@@ -77,4 +80,7 @@ trace) is the payload; keep the analysis core LLM-free (ADR-000).
 - **Sensitive-data layers mint, never mutate** (ADR-009) — a label/secret `Origin` is always
   constructed fresh with a `source_id` that encodes its layers; mutating `Origin.layers` in flight
   breaks summary monotonicity and the analyze-twice-byte-identical determinism gate.
+- **Never credit an unproven guard** (ADR-010) — a false "guarded" hides an unguarded sink (a
+  security FN). `guards.py`'s polarity analysis is load-bearing; do not reduce it to a first-match
+  or substring scan. Guard merges are always by intersection (unguarded if any path is).
 - On a build-specific technical doubt, consult a Fable 5 max agent before committing.

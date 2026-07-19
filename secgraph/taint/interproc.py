@@ -12,7 +12,7 @@ from ..callgraph.resolve import FnKey, build_index, resolve_all_sites
 from ..ir.model import ModuleIR
 from ..rules.model import Rules
 from .engine import TaintCtx, run_function_inter
-from .model import EMPTY_SUMMARY, Finding, Summary
+from .model import EMPTY_SUMMARY, Finding, Summary, merge_finding
 
 
 def tarjan_scc(nodes: list, succ: dict[FnKey, list[FnKey]]) -> list[list[FnKey]]:
@@ -98,7 +98,7 @@ def run_project_full(
                                sites=sites.get(k, {}), seed_params=True, constants=module.constants)
                 fs, summ, ts = run_function_inter(fn, ctx)
                 for f in fs:
-                    findings.setdefault(f.key, f)
+                    merge_finding(findings, f)   # keep-guard-intersection across fixpoint iterations
                 tainted_sites |= ts
                 assert _summary_leq(summaries[k], summ), f"non-monotone summary for {k} (bug)"
                 if summ != summaries[k]:

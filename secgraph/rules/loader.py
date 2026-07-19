@@ -11,6 +11,7 @@ from typing import Any, Iterable
 import yaml
 
 from .model import (
+    BarrierRule,
     LabelRule,
     PropagatorRule,
     Rules,
@@ -126,6 +127,12 @@ def load_rule_file(path: Path | str) -> Rules:
     rules.labels = {layer: _label(layer, d, ctx) for layer, d in (data.get("labels") or {}).items()}
     sec = data.get("secrets")
     rules.secrets = _secrets(sec, ctx) if sec else None
+    b = data.get("barriers")
+    if b:
+        rules.barriers = BarrierRule(
+            decorators=_tup(b.get("decorators")), callables=_tup(b.get("callables")),
+            test_attrs=_tup(b.get("test_attrs")), aborts=_tup(b.get("aborts")),
+        )
     return rules
 
 
