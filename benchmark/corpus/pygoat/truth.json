@@ -1,0 +1,729 @@
+{
+  "repo": "pygoat",
+  "commit": "19d17cc",
+  "sarif_sha256": "sha256:7e8723f78ca4f8a885507eb78c3424cdb369fc326de8dfef81f3d385d9a7b859",
+  "labeller": "claude-drafted-blind; maintainer-verified",
+  "process": "PROTOCOL.md#2",
+  "findings": [
+    {
+      "key": {
+        "rule_id": "py/code-injection",
+        "file": "introduction/mitre.py",
+        "line": 218,
+        "fingerprint": "6b0c238838fc829e:1",
+        "ordinal": 0
+      },
+      "codeql_secsev": "9.3",
+      "real": true,
+      "vuln_class": "code-injection",
+      "guard": "unguarded",
+      "guard_evidence": "mitre.py:215 mitre_lab_25_api \u2014 @csrf_exempt is NOT auth",
+      "severity": "critical",
+      "severity_rationale": "eval(request.POST expression) -> unauth RCE",
+      "true_source": "mitre.py:217",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/code-injection",
+        "file": "introduction/views.py",
+        "line": 460,
+        "fingerprint": "28b00e2a4bc7115e:1",
+        "ordinal": 1
+      },
+      "codeql_secsev": "9.3",
+      "real": true,
+      "vuln_class": "code-injection",
+      "guard": "unguarded",
+      "guard_evidence": "views.py cmd_lab2 \u2014 @csrf_exempt is NOT auth",
+      "severity": "critical",
+      "severity_rationale": "eval(user val) -> RCE",
+      "true_source": "views.py:453",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/mitre.py",
+        "line": 161,
+        "fingerprint": "88c708a4e56347de:1",
+        "ordinal": 2
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "weak-hashing-or-crypto",
+      "guard": "guarded",
+      "guard_evidence": "mitre.py csrf_lab_login \u2014 @authentication_decorator (PyGoat login-required)",
+      "severity": "medium",
+      "severity_rationale": "md5(password) for auth compare; behind auth",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/utility.py",
+        "line": 59,
+        "fingerprint": "fb8d26946a31581c:1",
+        "ordinal": 3
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "weak-hashing-or-crypto",
+      "guard": "n/a",
+      "guard_evidence": "utility.py:58 customHash \u2014 module helper, no route",
+      "severity": "medium",
+      "severity_rationale": "sha256(password)[::-1] as a password hash (fast, unsalted, no KDF)",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/views.py",
+        "line": 1026,
+        "fingerprint": "9016d9299e7d2389:1",
+        "ordinal": 4
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "weak-hashing-or-crypto",
+      "guard": "unguarded",
+      "guard_evidence": "views.py crypto_failure_lab \u2014 no auth decorator",
+      "severity": "medium",
+      "severity_rationale": "md5(password) for login; unauthenticated",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/weak-sensitive-data-hashing",
+        "file": "introduction/views.py",
+        "line": 1194,
+        "fingerprint": "3fecbc94bb3f6862:1",
+        "ordinal": 5
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "weak-hashing-or-crypto",
+      "guard": "guarded",
+      "guard_evidence": "views.py auth_failure_lab3 \u2014 @authentication_decorator (PyGoat login-required)",
+      "severity": "medium",
+      "severity_rationale": "sha256(password) fast hash; behind auth",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/full-ssrf",
+        "file": "introduction/views.py",
+        "line": 963,
+        "fingerprint": "3ab50057f03fbcd3:1",
+        "ordinal": 6
+      },
+      "codeql_secsev": "9.1",
+      "real": true,
+      "vuln_class": "ssrf",
+      "guard": "guarded",
+      "guard_evidence": "views.py ssrf_lab2 \u2014 @authentication_decorator (PyGoat login-required)",
+      "severity": "high",
+      "severity_rationale": "requests.get(request.POST url) full SSRF; behind auth",
+      "true_source": "views.py:961",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/insecure-cookie",
+        "file": "introduction/views.py",
+        "line": 291,
+        "fingerprint": "c22ab881d455f506:1",
+        "ordinal": 7
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "insecure-cookie",
+      "guard": "n/a",
+      "guard_evidence": "views.py auth_lab_signup set_cookie \u2014 cookie-flag config",
+      "severity": "low",
+      "severity_rationale": "userid cookie secure=False,samesite=None -> sent over HTTP",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/insecure-cookie",
+        "file": "introduction/views.py",
+        "line": 305,
+        "fingerprint": "c22ab7ecde045c6d:1",
+        "ordinal": 8
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "insecure-cookie",
+      "guard": "n/a",
+      "guard_evidence": "views.py auth_lab_login set_cookie",
+      "severity": "low",
+      "severity_rationale": "userid cookie secure=False",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/insecure-cookie",
+        "file": "introduction/views.py",
+        "line": 319,
+        "fingerprint": "c22ab7ecde045c6d:2",
+        "ordinal": 9
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "insecure-cookie",
+      "guard": "n/a",
+      "guard_evidence": "views.py auth_lab_login set_cookie",
+      "severity": "low",
+      "severity_rationale": "userid cookie secure=False",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "introduction/views.py",
+        "line": 162,
+        "fingerprint": "3efd6832e5326916:1",
+        "ordinal": 10
+      },
+      "codeql_secsev": "8.8",
+      "real": true,
+      "vuln_class": "sql-injection",
+      "guard": "unguarded",
+      "guard_evidence": "views.py sql_lab \u2014 no auth decorator",
+      "severity": "critical",
+      "severity_rationale": "raw(sql_query) with concatenated user name/password (views.py:158) -> auth-bypass SQLi",
+      "true_source": "views.py:147",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/sql-injection",
+        "file": "introduction/views.py",
+        "line": 878,
+        "fingerprint": "858a7e6ceaf8454e:1",
+        "ordinal": 11
+      },
+      "codeql_secsev": "8.8",
+      "real": true,
+      "vuln_class": "sql-injection",
+      "guard": "unguarded",
+      "guard_evidence": "views.py injection_sql_lab \u2014 @csrf_exempt is NOT auth",
+      "severity": "critical",
+      "severity_rationale": "raw(sql_query) concatenated user input -> SQLi",
+      "true_source": "views.py:855",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/cookie-injection",
+        "file": "dockerized_labs/broken_auth_lab/app.py",
+        "line": 49,
+        "fingerprint": "bf0a226451c305ca:1",
+        "ordinal": 12
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "cookie-injection",
+      "guard": "unguarded",
+      "guard_evidence": "broken_auth_lab/app.py:39 /login POST \u2014 public",
+      "severity": "medium",
+      "severity_rationale": "session cookie = base64('username:datetime') unsigned/predictable -> forgeable session",
+      "true_source": "app.py:31 request.form username",
+      "notes": "MULTI-CLASS: broken session mgmt; base64 blocks header-injection, forgery is the real issue"
+    },
+    {
+      "key": {
+        "rule_id": "py/cookie-injection",
+        "file": "dockerized_labs/broken_auth_lab/app.py",
+        "line": 51,
+        "fingerprint": "a74167006e1f3f19:1",
+        "ordinal": 13
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "cookie-injection",
+      "guard": "unguarded",
+      "guard_evidence": "broken_auth_lab/app.py:39 /login POST \u2014 public",
+      "severity": "medium",
+      "severity_rationale": "insecure 'remember me' sets same unsigned base64 session cookie",
+      "true_source": "app.py:31",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/flask-debug",
+        "file": "dockerized_labs/broken_auth_lab/app.py",
+        "line": 123,
+        "fingerprint": "9c22980cf6d98d18:1",
+        "ordinal": 14
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "debug-mode",
+      "guard": "n/a",
+      "guard_evidence": "broken_auth_lab/app.py:123 app.run(debug=True, host='0.0.0.0')",
+      "severity": "high",
+      "severity_rationale": "Flask debug=True on 0.0.0.0 -> Werkzeug debugger RCE + tracebacks, remotely reachable",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/xml-bomb",
+        "file": "introduction/views.py",
+        "line": 260,
+        "fingerprint": "73ec937b56aa4bdd:1",
+        "ordinal": 15
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "xml-external-entity-or-bomb",
+      "guard": "unguarded",
+      "guard_evidence": "views.py xxe_parse \u2014 @csrf_exempt is NOT auth",
+      "severity": "high",
+      "severity_rationale": "parseString with external_ges=True on request.body -> XML entity expansion (billion-laughs DoS)",
+      "true_source": "views.py:256",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-storage-sensitive-data",
+        "file": "introduction/playground/A9/archive.py",
+        "line": 49,
+        "fingerprint": "669244316a57f7f1:1",
+        "ordinal": 16
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "n/a",
+      "guard_evidence": "A9/archive.py info() \u2014 logging helper",
+      "severity": "low",
+      "severity_rationale": "writes sensitive msg to test.log in cleartext",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 159,
+        "fingerprint": "949eab12a3a80d29:1",
+        "ordinal": 17
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "unguarded",
+      "guard_evidence": "views.py sql_lab print(sql_query w/ password) \u2014 no auth",
+      "severity": "low",
+      "severity_rationale": "credentials/query printed to console in cleartext",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 314,
+        "fingerprint": "383804d2366e1f35:1",
+        "ordinal": 18
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "unguarded",
+      "guard_evidence": "views.py auth_lab_login print(user,passwd) \u2014 no auth",
+      "severity": "low",
+      "severity_rationale": "credentials/query printed to console in cleartext",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 755,
+        "fingerprint": "237ffbf0757cd2f:1",
+        "ordinal": 19
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "unguarded",
+      "guard_evidence": "views.py a1_broken_access_lab_1 print(password) \u2014 @csrf_exempt is NOT auth",
+      "severity": "low",
+      "severity_rationale": "credentials/query printed to console in cleartext",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 861,
+        "fingerprint": "88a551cb43b5990f:1",
+        "ordinal": 20
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "unguarded",
+      "guard_evidence": "views.py injection_sql_lab print(password) \u2014 @csrf_exempt is NOT auth",
+      "severity": "low",
+      "severity_rationale": "credentials/query printed to console in cleartext",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/clear-text-logging-sensitive-data",
+        "file": "introduction/views.py",
+        "line": 875,
+        "fingerprint": "15f7d82636eb0bed:1",
+        "ordinal": 21
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "cleartext-storage-or-logging",
+      "guard": "unguarded",
+      "guard_evidence": "views.py injection_sql_lab print(sql_query) \u2014 @csrf_exempt is NOT auth",
+      "severity": "low",
+      "severity_rationale": "credentials/query printed to console in cleartext",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/unsafe-deserialization",
+        "file": "dockerized_labs/insec_des_lab/main.py",
+        "line": 36,
+        "fingerprint": "71a4942175c424e4:1",
+        "ordinal": 22
+      },
+      "codeql_secsev": "9.8",
+      "real": true,
+      "vuln_class": "deserialization",
+      "guard": "unguarded",
+      "guard_evidence": "insec_des_lab/main.py:32 /deserialize POST \u2014 public",
+      "severity": "critical",
+      "severity_rationale": "pickle.loads(base64 request.form) -> unauth RCE",
+      "true_source": "main.py:33",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/unsafe-deserialization",
+        "file": "introduction/views.py",
+        "line": 214,
+        "fingerprint": "1e99b81d229ec99d:1",
+        "ordinal": 23
+      },
+      "codeql_secsev": "9.8",
+      "real": true,
+      "vuln_class": "deserialization",
+      "guard": "unguarded",
+      "guard_evidence": "views.py insec_des_lab \u2014 no auth decorator",
+      "severity": "critical",
+      "severity_rationale": "pickle.loads(cookie token) -> RCE via cookie",
+      "true_source": "views.py:205",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/unsafe-deserialization",
+        "file": "introduction/views.py",
+        "line": 560,
+        "fingerprint": "a7ea016977244140:1",
+        "ordinal": 24
+      },
+      "codeql_secsev": "9.8",
+      "real": true,
+      "vuln_class": "deserialization",
+      "guard": "unguarded",
+      "guard_evidence": "views.py a9_lab \u2014 @csrf_exempt is NOT auth",
+      "severity": "critical",
+      "severity_rationale": "yaml.load(uploaded file, yaml.Loader) unsafe -> RCE",
+      "true_source": "views.py:551",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/client-exposed-cookie",
+        "file": "introduction/views.py",
+        "line": 291,
+        "fingerprint": "c22ab881d455f506:1",
+        "ordinal": 25
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "insecure-cookie",
+      "guard": "n/a",
+      "guard_evidence": "views.py auth_lab_signup set_cookie \u2014 HttpOnly missing",
+      "severity": "low",
+      "severity_rationale": "userid cookie readable by JS (no HttpOnly)",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/client-exposed-cookie",
+        "file": "introduction/views.py",
+        "line": 305,
+        "fingerprint": "c22ab7ecde045c6d:1",
+        "ordinal": 26
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "insecure-cookie",
+      "guard": "n/a",
+      "guard_evidence": "views.py auth_lab_login set_cookie",
+      "severity": "low",
+      "severity_rationale": "userid cookie no HttpOnly",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/client-exposed-cookie",
+        "file": "introduction/views.py",
+        "line": 319,
+        "fingerprint": "c22ab7ecde045c6d:2",
+        "ordinal": 27
+      },
+      "codeql_secsev": "5.0",
+      "real": true,
+      "vuln_class": "insecure-cookie",
+      "guard": "n/a",
+      "guard_evidence": "views.py auth_lab_login set_cookie",
+      "severity": "low",
+      "severity_rationale": "userid cookie no HttpOnly",
+      "true_source": "",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/path-injection",
+        "file": "introduction/playground/ssrf/main.py",
+        "line": 8,
+        "fingerprint": "6eeabe81b4e8b6ca:1",
+        "ordinal": 28
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "path-traversal",
+      "guard": "guarded",
+      "guard_evidence": "apis.py:24 ssrf_code_checker \u2014 'if request.user.is_authenticated'",
+      "severity": "high",
+      "severity_rationale": "user-influenced path -> open() arbitrary file read (playground/ssrf/main.py:8); behind auth",
+      "true_source": "apis.py:23",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/path-injection",
+        "file": "introduction/views.py",
+        "line": 927,
+        "fingerprint": "e2256906cb98c128:1",
+        "ordinal": 29
+      },
+      "codeql_secsev": "7.5",
+      "real": true,
+      "vuln_class": "path-traversal",
+      "guard": "unguarded",
+      "guard_evidence": "views.py ssrf_lab \u2014 no auth decorator",
+      "severity": "high",
+      "severity_rationale": "open(os.path.join(dirname,user file)) -> arbitrary file read",
+      "true_source": "views.py:918",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/xxe",
+        "file": "introduction/views.py",
+        "line": 260,
+        "fingerprint": "73ec937b56aa4bdd:1",
+        "ordinal": 30
+      },
+      "codeql_secsev": "9.1",
+      "real": true,
+      "vuln_class": "xml-external-entity-or-bomb",
+      "guard": "unguarded",
+      "guard_evidence": "views.py xxe_parse \u2014 @csrf_exempt is NOT auth",
+      "severity": "high",
+      "severity_rationale": "external_ges=True -> XXE: external entity file disclosure/SSRF",
+      "true_source": "views.py:256",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/command-line-injection",
+        "file": "introduction/mitre.py",
+        "line": 233,
+        "fingerprint": "5adf051748e71578:1",
+        "ordinal": 31
+      },
+      "codeql_secsev": "9.8",
+      "real": true,
+      "vuln_class": "command-injection",
+      "guard": "unguarded",
+      "guard_evidence": "mitre.py command_out helper <- mitre_lab_17_api @csrf_exempt",
+      "severity": "critical",
+      "severity_rationale": "subprocess.Popen(command, shell=True) with 'nmap '+request.POST ip -> unauth RCE",
+      "true_source": "mitre.py:240",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/command-line-injection",
+        "file": "introduction/views.py",
+        "line": 431,
+        "fingerprint": "4fbe055c4c255e31:1",
+        "ordinal": 32
+      },
+      "codeql_secsev": "9.8",
+      "real": true,
+      "vuln_class": "command-injection",
+      "guard": "unguarded",
+      "guard_evidence": "views.py cmd_lab \u2014 @csrf_exempt is NOT auth",
+      "severity": "critical",
+      "severity_rationale": "subprocess.Popen(command, shell=True) with user domain -> RCE",
+      "true_source": "views.py:415",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 654,
+        "fingerprint": "4391af9ab416e779:1",
+        "ordinal": 33
+      },
+      "codeql_secsev": "6.1",
+      "real": true,
+      "vuln_class": "log-injection",
+      "guard": "guarded",
+      "guard_evidence": "views.py a10_lab2 \u2014 @authentication_decorator (PyGoat login-required)",
+      "severity": "low",
+      "severity_rationale": "user-controlled ip/user (X-Forwarded-For) into logging.* -> log forging; behind auth",
+      "true_source": "views.py:645",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 668,
+        "fingerprint": "e4b7c2297e02a894:1",
+        "ordinal": 34
+      },
+      "codeql_secsev": "6.1",
+      "real": true,
+      "vuln_class": "log-injection",
+      "guard": "guarded",
+      "guard_evidence": "views.py a10_lab2 \u2014 @authentication_decorator (PyGoat login-required)",
+      "severity": "low",
+      "severity_rationale": "user-controlled ip/user (X-Forwarded-For) into logging.* -> log forging; behind auth",
+      "true_source": "views.py:645",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 669,
+        "fingerprint": "cb42bef37db30813:1",
+        "ordinal": 35
+      },
+      "codeql_secsev": "6.1",
+      "real": true,
+      "vuln_class": "log-injection",
+      "guard": "guarded",
+      "guard_evidence": "views.py a10_lab2 \u2014 @authentication_decorator (PyGoat login-required)",
+      "severity": "low",
+      "severity_rationale": "user-controlled ip/user (X-Forwarded-For) into logging.* -> log forging; behind auth",
+      "true_source": "views.py:645",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/log-injection",
+        "file": "introduction/views.py",
+        "line": 672,
+        "fingerprint": "1d370b249622cc12:1",
+        "ordinal": 36
+      },
+      "codeql_secsev": "6.1",
+      "real": true,
+      "vuln_class": "log-injection",
+      "guard": "guarded",
+      "guard_evidence": "views.py a10_lab2 \u2014 @authentication_decorator (PyGoat login-required)",
+      "severity": "low",
+      "severity_rationale": "user-controlled ip/user (X-Forwarded-For) into logging.* -> log forging; behind auth",
+      "true_source": "views.py:645",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/shell-command-constructed-from-input",
+        "file": "introduction/mitre.py",
+        "line": 241,
+        "fingerprint": "d7100a6e52f51577:1",
+        "ordinal": 37
+      },
+      "codeql_secsev": "6.3",
+      "real": true,
+      "vuln_class": "command-injection",
+      "guard": "unguarded",
+      "guard_evidence": "mitre.py mitre_lab_17_api \u2014 @csrf_exempt is NOT auth",
+      "severity": "high",
+      "severity_rationale": "'nmap '+ip command string built from request.POST ip (executed at [31])",
+      "true_source": "mitre.py:238",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/shell-command-constructed-from-input",
+        "file": "introduction/views.py",
+        "line": 424,
+        "fingerprint": "7b9836cdfc86f18c:1",
+        "ordinal": 38
+      },
+      "codeql_secsev": "6.3",
+      "real": true,
+      "vuln_class": "command-injection",
+      "guard": "unguarded",
+      "guard_evidence": "views.py cmd_lab \u2014 @csrf_exempt is NOT auth",
+      "severity": "high",
+      "severity_rationale": "command 'nslookup {domain}' built from user input (executed at [32])",
+      "true_source": "views.py:415",
+      "notes": ""
+    },
+    {
+      "key": {
+        "rule_id": "py/shell-command-constructed-from-input",
+        "file": "introduction/views.py",
+        "line": 426,
+        "fingerprint": "b91055a80374eac8:1",
+        "ordinal": 39
+      },
+      "codeql_secsev": "6.3",
+      "real": true,
+      "vuln_class": "command-injection",
+      "guard": "unguarded",
+      "guard_evidence": "views.py cmd_lab \u2014 @csrf_exempt is NOT auth",
+      "severity": "high",
+      "severity_rationale": "command 'dig {domain}' built from user input",
+      "true_source": "views.py:415",
+      "notes": ""
+    }
+  ]
+}
