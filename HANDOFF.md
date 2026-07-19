@@ -1,5 +1,24 @@
 # HANDOFF — state for the next session
 
+## RELEASE-READY (2026-07-19) — ROADMAP phases 0–13 delivered, awaiting the maintainer's push
+The OSS-release track (ADR-015) is done. Tree clean, 121 tests, wheel builds (benchmark/ excluded),
+`secgraph 0.1.0`, MIT. **Nothing is pushed — the maintainer controls the first push/PR.**
+- **Phase 11 (hardening):** MIT LICENSE, PyPI classifiers, `secgraph --version`, CI `package` job
+  (wheel→clean-venv→analyze-smoke→determinism) + py3.13.
+- **Phase 12 (benchmark):** `benchmark/` — pre-registered (PROTOCOL.md), 66-finding corpus (PyGoat dev +
+  Vulpy + Vulnerable-Flask-App), blind + Fable-audited truth, A/B/C sweep (gemma4:e4b, 100% det.),
+  report.py → **BENCHMARK.md**. Honest result: **efficiency win (~1/7 tokens, same real/FP), accuracy
+  inconclusive, prioritization no-win**; the self-audit surfaced a **real guard bug**.
+- **Phase 13 (docs):** README rewritten (post-pivot, honest benchmark headline), CONTRIBUTING, SECURITY,
+  docs/img screenshot.
+- **HN post draft:** `scratchpad/HN_POST_DRAFT.md` (maintainer's, not in repo).
+
+### TOP FOLLOW-UP (a real bug the benchmark caught, tracked for a v-next run)
+`taint/guards.py` `guard_map` misses Django's inline `if request.user.is_authenticated:` gate → it
+**over-reports `unguarded`** (self-audit: 56% unguarded-precision; never a false `guarded`, 100%). Fixing
+it (recognize `request.user.is_authenticated` as a B2 barrier / test-attr) should lift Arm-B guard_acc and
+O3 prioritization; re-run the sweep as a labelled **v-next** and amend BENCHMARK.md (freeze discipline).
+
 ## Where we are
 Bootstrap + phases 0–8 (MVP) + Tier-3 typing + **Phases 9 + 10 (SARIF ingestion + layer enrichment
 — the PIVOT) complete. 121 tests green**, quarantine wall intact. **The pivot is delivered**:
