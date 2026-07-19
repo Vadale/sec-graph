@@ -849,6 +849,79 @@ f3=by('js-sqli');            assert f3['guard_status']=='unknown' and not f3['un
 
 ---
 
+### Phase 11 — Release hardening  *(OSS release, part 1 — ADR-015)*
+
+Make the repo a credible, pip-installable open-source release. No new analysis capability:
+licence, packaging, CLI ergonomics, and CI that *proves* the wheel really installs.
+
+- `LICENSE` = **MIT** (ADR-015). `pyproject` gains PyPI `classifiers`; `secgraph --version`.
+- CI `package` job: build wheel → install in a clean venv → `analyze` smoke on the **bundled**
+  rules → determinism (taint.json byte-identical twice); test matrix adds Python 3.13.
+- Deferred (documented, not a blocker): FastAPI `Depends()` barriers (needs IR param-default
+  extraction; a safe under-claim, ADR-010/015); raw-text multi-language secret scan.
+
+> **Build Prompt — Phase 11:** "Replace LICENSE with MIT; add pyproject classifiers; add a
+> `--version` eager Typer callback sourced from `importlib.metadata`. Harden
+> `.github/workflows/ci.yml`: add py3.13 and a `package` job that builds the wheel, installs it
+> into a fresh venv, runs `secgraph analyze tests/fixtures/tiny` from a temp cwd (bundled rules),
+> asserts the three artifacts, and `cmp`s taint.json across two runs. Do not touch the engine or
+> the two laws."
+
+**Acceptance (executed 2026-07-19):**
+```
+uv build --wheel                                     # → dist/secgraph-0.1.0-py3-none-any.whl (bundles _rule_packs + viz)
+python -m venv /tmp/ce && /tmp/ce/bin/pip install dist/secgraph-0.1.0-*.whl
+cd /tmp/anywhere && /tmp/ce/bin/secgraph --version   # → secgraph 0.1.0
+/tmp/ce/bin/secgraph analyze <repo>/tests/fixtures/tiny --out-dir out  # → 3 artifacts, 1 finding (bundled rules)
+pytest -q                                            # → 121 passed
+```
+
+### Phase 12 — Benchmark: does the map + MCP help triage?  *(OSS release, part 2 — ADR-015)*
+
+The **non-circular control-vs-treatment** study. Design consulted with a **Fable 5 max** agent
+before locking. sec-graph does not *find* vulns; it makes triage of a SAST's findings better —
+measure that delta honestly, with the limits.
+
+- **Corpus** `benchmark/corpus/`: PyGoat + 2–3 deliberately-vulnerable Python apps (+ optional
+  real CVE commits), each with a **hand-labelled** `truth.json` (per finding: real/FP, guard
+  state, severity, vuln class). Ground truth is ours, **not** the engine's CWE (anti-circular).
+- **Arms** on the SAME findings: **A** = LLM triages raw SAST output (SARIF text / whole-file
+  context); **B** = LLM triages via the sec-graph MCP (enriched layers, unguarded verdict,
+  minimal hash-verified slices, prioritized order). Local model `gemma4:e4b-it-qat` (Claude-Code
+  Haiku only if needed).
+- **Metrics:** class accuracy, exploitability recall, **prioritization** (rank/time-to-first-
+  critical), tokens, wall-time. Plus a **modest human arm** (small timed task, caveated).
+  Reproducible `benchmark/run.py` + `BENCHMARK.md` with the A/B delta and a
+  "when it helps / when it does not" table.
+
+> **Build Prompt — Phase 12:** "After a Fable 5 max design review, build `benchmark/`: the
+> labelled-corpus loader, the two triage arms (raw vs MCP) over one shared finding set per repo,
+> the scorer against `truth.json`, and a deterministic report. Seed from the Part-2 harness
+> (`mcp_pull`/`gemma_triage`/`score`). No overclaiming: numbers executed, limits explicit."
+
+**Acceptance:** `python benchmark/run.py` reproduces the `BENCHMARK.md` numbers; the A/B delta and
+the limits table are present; corpus labels are hand-written, version-controlled files.
+
+### Phase 13 — Documentation for release  *(OSS release, part 3 — ADR-015)*
+
+Docs a stranger can install and use from, citing the Phase-12 numbers. **doc-writer** agent.
+
+- **README.md**: positioning (map + local-LLM triage over ANY SAST), quickstart
+  (`semgrep --sarif` / CodeQL → `secgraph analyze --sarif` → `view` / `serve`), screenshots, the
+  benchmark headline, honest scope/limits, MIT + credits (graphify, tree-sitter).
+- **docs/**: usage guide; MCP integration guide (point your LLM at `secgraph serve`); architecture
+  (exists). `CONTRIBUTING.md`; responsible-use (§20). Optional demo GIF/asciinema.
+
+> **Build Prompt — Phase 13:** "With the doc-writer agent, write the release docs for the
+> designated reader (a security analyst / developer auditing their own code). Every claim matches
+> ADR-014's licence/scope notes and the Phase-12 benchmark. A fresh reader installs and runs from
+> the README alone."
+
+**Acceptance:** a clean-machine reader follows the README → installs → runs analyze + view + serve
+with no extra knowledge; no claim contradicts ADR-014's licence/scope notes.
+
+---
+
 ## 15. Runtime triage prompts
 
 Shipped as MCP prompts; the "sniper prompts." The model receives only a slice +
@@ -997,11 +1070,11 @@ determinism, offline, and node-count-unchanged tests green.
 
 ## 20. Open-source & responsible-use notes
 
-- **Licensing:** sec-graph's own code under **Apache-2.0** (permissive + patent
-  grant; MIT-compatible so we can depend on graphify and include its
-  attributed viz fork). Ship a **NOTICE** crediting graphify (MIT) for the forked
-  HTML template. If you prefer copyleft, GPLv3 is possible but complicates bundling —
-  decide before the first public commit.
+- **Licensing:** sec-graph's own code under **MIT** (ADR-015, superseding the earlier
+  Apache-2.0 note). Permissive and compatible with graphify (MIT), which is a runtime pip
+  dependency we do not redistribute; the viz is hand-rolled (ADR-012), so no third-party
+  code is bundled and a bare MIT `LICENSE` suffices. Credit graphify + tree-sitter in the
+  README as a courtesy.
 - **Defensive by design:** static triage only; no exploitation code ships. The
   triage prompts (§15) enforce a defensive framing.
 - **Responsible defaults & docs:** default to auditing *your own* code; document a

@@ -57,16 +57,29 @@ See `diary/2026-07-19-13-viz.md` (Phase 5), `-12-mcp.md`, `-11-wpc2.md`, `-10-wp
 viz; 013 = packaging bundles the data; **014 = PIVOT — map + local-LLM-triage layer over ANY SAST via
 SARIF ingestion; the taint engine is demoted to the built-in Python fallback**).
 
-## Next session — the pivot (ADR-014, ROADMAP Phases 9–10) is DELIVERED. Remaining = polish/deferred.
-The product loop works end-to-end: ingest SARIF → bind → enrich → map + MCP triage.
+## Now on the OSS-release track (ADR-015, ROADMAP Phases 11–13). Pivot (9–10) DELIVERED + road-validated.
+The product loop works end-to-end: ingest SARIF → bind → enrich → map + MCP triage. **Road-validated**
+(2026-07-19): real Semgrep + **CodeQL** on PyGoat (40 findings, 33 with codeFlows, 40/40 bound, cross-file
+23-hop path-injection); a **local Gemma 3n E4B triaged the 40 CodeQL findings via the real MCP server** at
+82–88% class-agreement, ~3.5s + ~575 tok each. Screenshots + harness in scratchpad.
 
-### High-value next
-- **README / demo walkthrough**: "run `semgrep scan --sarif --dataflow-traces -o out.sarif`, then
-  `secgraph analyze . --sarif out.sarif` → the map + one-click MCP triage." Verify the licence/scope
-  notes in ADR-014 before public claims (Semgrep OSS taint is intra-file; CodeQL non-OSS closed-source).
-- **CI**: build+publish the wheel; run `pytest` on 3 OS × 2 Python; a pinned real-repo SARIF corpus.
-- **FastAPI `Depends` barriers** — a param-default guard `guard_map` doesn't see yet (auth verdict
-  under-claims on FastAPI DI); raw-text multi-language secret scan reusing `classify_secret`.
+### Phase 11 — DONE (2026-07-19)
+LICENSE → MIT (was Apache-2.0; ADR-015); pyproject `classifiers`; `secgraph --version`; CI `package` job
+(wheel → clean-venv install → analyze-on-bundled-rules smoke → determinism) + Python 3.13. **Verified by
+hand:** the wheel is genuinely pip-installable and analyzes from a clean env. 121 tests green.
+
+### Next: Phase 12 — Benchmark (ADR-015)
+The **non-circular control-vs-treatment** study: A (LLM on raw SAST output) vs B (LLM via sec-graph MCP)
+on the SAME findings, scored against a **hand-labelled** `truth.json` (not the engine's CWE). Model
+`gemma4:e4b-it-qat` only (Haiku if needed). **Consult a Fable 5 max agent on the design before locking.**
+Seed from the Part-2 harness (`scratchpad/{mcp_pull,gemma_triage,score}.py`). Then Phase 13 (docs, doc-writer).
+
+### Deferred (documented, not blockers)
+- **FastAPI `Depends()` barriers** — IR captures param names/types but **not param default expressions**,
+  so `x = Depends(get_current_user)` isn't seen; auth verdict under-claims on FastAPI DI (safe: never a
+  false `guarded`, ADR-010). A self-contained later unit (needs a tree-sitter extraction extension).
+- Raw-text multi-language secret scan reusing `classify_secret`; `[project.urls]` in pyproject (add when
+  the GitHub repo exists).
 
 ### Icebox (engine is the fallback — maintenance only)
 H2 field-sensitivity, Tier-3 generics, kwargs mapping. Nearest-def binding can mis-bind within a file

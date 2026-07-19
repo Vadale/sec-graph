@@ -8,6 +8,26 @@ app = typer.Typer(
 )
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from importlib.metadata import PackageNotFoundError, version
+        try:
+            v = version("secgraph")
+        except PackageNotFoundError:      # running from a source tree without an install
+            v = "0.1.0"
+        typer.echo(f"secgraph {v}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False, "--version", callback=_version_callback, is_eager=True,
+        help="Show the version and exit."),
+) -> None:
+    """sec-graph - local taint/data-flow security map built on graphify."""
+
+
 @app.command()
 def analyze(
     path: str,

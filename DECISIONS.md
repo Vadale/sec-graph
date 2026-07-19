@@ -354,3 +354,44 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
   licences, dependency weight — users run their SAST, we ingest the artifact); per-tool native adapters
   only, no SARIF (unbounded N×M); `unguarded:true` for unknown guard status (alarm-fatigue kills the
   glow's signal); name-based node binding (re-banned; ADR-008).
+
+## ADR-015 — Open-source release: MIT, a non-circular control-vs-treatment benchmark, docs last
+- 2026-07-19 · Accepted
+- **Context:** phases 0–10 are delivered and road-validated (real Semgrep + CodeQL on PyGoat; a local
+  Gemma 3n E4B triaging 40 CodeQL findings via the real MCP server at 82–88% class-agreement). The
+  maintainer wants a public open-source release: fix the release-blocking technical gaps, document the
+  project well, and back the claims with a "quasi-scientific" benchmark that also delineates the limits.
+- **Decision (licence): MIT**, superseding §20's Apache-2.0 suggestion. The repo already carried an
+  Apache-2.0 `LICENSE`; the maintainer chose MIT with the patent-grant trade-off spelled out. MIT is
+  permissive and compatible with graphify (MIT, a runtime pip dependency we do not redistribute); the viz
+  is hand-rolled (ADR-012), so no third-party code is bundled and a bare MIT LICENSE suffices. Nothing is
+  public until the maintainer pushes, so the switch is reversible.
+- **Decision (benchmark = control vs treatment, non-circular):** sec-graph does **not** find vulns — the
+  upstream SAST does — so "sec-graph finds N vulns" is not our claim. The honest, defensible, stronger
+  claim: **given the same SAST findings, sec-graph's enrichment + minimal hash-verified slices +
+  unguarded-first prioritization make triage (by an LLM and a human) more accurate, faster, cheaper, and
+  better-prioritized than the raw SAST output.** The experiment is **arm A (LLM on raw findings/whole-file
+  context) vs arm B (LLM on sec-graph MCP)** over the *same* inputs, scored against a **hand-labelled
+  ground truth** (real/FP, guard state, severity) — never the CWE of the engine we enrich (that would be
+  circular). Local model = **`gemma4:e4b-it-qat` only** (maintainer's call; Claude-Code Haiku as a second
+  point only if needed), so the sweep is a within-model A/B, not a size race. The human arm is **modest and
+  honest** (a small timed prioritization task, reported with caveats — a demonstration, not an RCT). The
+  deliverable includes a "when it helps / when it does not" limits table. Design is consulted with a
+  **Fable 5 max agent** before locking Phase 12 (standing instruction).
+- **Decision (order): fix → benchmark → docs.** The README's scientific claims and the finalized CLI must
+  cite real benchmark numbers, so full docs come **last**; only a minimal LICENSE/README/CONTRIBUTING land
+  in the hardening phase for a valid repo. All release-facing artifacts are in **English** (rule #1).
+- **Decision (release scope, Phase 11):** LICENSE (MIT), PyPI `classifiers`, `secgraph --version`, CI
+  hardening (a `package` job that builds the wheel, installs it in a clean venv, runs an `analyze` smoke on
+  the bundled rules, and checks determinism; + Python 3.13). Verified by hand this session: the wheel is
+  genuinely pip-installable and analyzes from a clean env with bundled rules.
+- **Deferred (documented, not a blocker): FastAPI `Depends()` auth barriers.** The IR captures param names
+  and type annotations but not param *default expressions*, so recognizing `x = Depends(get_current_user)`
+  needs a tree-sitter extraction extension — a self-contained later unit. Until then the auth verdict
+  **under-claims** on FastAPI DI (reads `unknown`/`unguarded`, never a false `guarded`) — the safe
+  direction under ADR-010. Also deferred: raw-text multi-language secret scan.
+- **Why:** the control-vs-treatment framing measures the delta that *is* our contribution and sidesteps
+  the circularity that would (rightly) sink an "it finds vulns" claim. Delineating limits precisely is a
+  credibility multiplier, not a weakness. Docs-last avoids rewriting claims before the numbers exist.
+- **Roadmap:** Phase 11 (release hardening) · Phase 12 (benchmark harness + labelled corpus + study,
+  Fable-consulted) · Phase 13 (documentation for release, doc-writer agent).
