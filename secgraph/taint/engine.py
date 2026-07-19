@@ -34,6 +34,7 @@ from ..ir.model import (
     iter_calls,
     stmt_exprs,
 )
+from ..rules.labels import classify_secret, ident_label
 from ..rules.match import match_propagator, match_sanitizer, match_sink, match_source
 from ..rules.model import Rules
 from .model import EMPTY_SUMMARY, Finding, Origin, SinkPoint, Summary
@@ -51,6 +52,21 @@ def _sink_param_key(item):
     """Total order for (param_index, SinkPoint) tuples (SinkPoint isn't orderable)."""
     i, sp = item
     return (i, sp.sink_id, sp.file, sp.function, sp.line, sp.via)
+
+
+def _ident_origin(name: str, span, ctx: "TaintCtx"):
+    """A credentials/PII label-Origin for an identifier that NAMES sensitive data, or None.
+    Minted fresh (never a mutation of an existing Origin) so summary monotonicity + byte-
+    determinism hold (a mutated origin would make old layer-set elements vanish across the
+    fixpoint and collide on Finding.key)."""
+    layers, conf = ident_label(name, ctx.rules)
+    return Origin(f"label:{'-'.join(layers)}", layers, span, conf) if layers else None
+
+
+def _secret_origin(text: str, span, ctx: "TaintCtx"):
+    """A credentials/PII label-Origin for a string literal / constant that IS a secret, or None."""
+    layers, sid, conf = classify_secret(text, ctx.rules)
+    return Origin(sid, layers, span, conf) if layers else None
 
 
 def _param_expr(call: Call, binding, p: int):
@@ -76,6 +92,7 @@ class TaintCtx:
     summaries: dict = field(default_factory=dict)   # dict[FnKey, Summary] (read-only during a run)
     sites: dict = field(default_factory=dict)        # dict[SiteKey, Binding] for THIS function
     seed_params: bool = False
+    constants: dict = field(default_factory=dict)    # module-level NAME -> string literal content
 
 
 def _walrus_pairs(expr):
@@ -89,12 +106,22 @@ def _walrus_pairs(expr):
 
 def expr_taint(expr, state: State, ctx: TaintCtx) -> frozenset:
     """The set of Origins tainting the value of ``expr`` under ``state``. Pure."""
-    if expr is None or isinstance(expr, Literal):
+    if expr is None:
+        return frozenset()
+    if isinstance(expr, Literal):
+        if expr.text is not None:                            # a hardcoded secret literal is a source
+            o = _secret_origin(expr.text, expr.span, ctx)
+            return frozenset({o}) if o is not None else frozenset()
         return frozenset()
 
     src = match_source(expr, ctx.imap, ctx.rules)
     if src is not None:
-        return frozenset({Origin(src.id, src.layers, expr.span, src.confidence)})
+        out = {Origin(src.id, src.layers, expr.span, src.confidence)}
+        if isinstance(expr, Index) and isinstance(expr.index, Literal) and expr.index.text is not None:
+            o = _ident_origin(expr.index.text, expr.span, ctx)   # request.form['password'] -> credentials
+            if o is not None:
+                out.add(o)
+        return frozenset(out)
 
     if isinstance(expr, Call):
         if match_sanitizer(expr, ctx.imap, ctx.rules) is not None:
@@ -128,7 +155,15 @@ def expr_taint(expr, state: State, ctx: TaintCtx) -> frozenset:
         return _call_over_approx(expr, state, ctx)
 
     if isinstance(expr, Name):
-        return state.get(expr.ident, frozenset())
+        st = state.get(expr.ident)
+        if st is not None:
+            return st
+        val = ctx.constants.get(expr.ident)                  # module constant: SECRET_KEY = "AKIA..."
+        if val is not None:
+            o = _secret_origin(val, expr.span, ctx) or _ident_origin(expr.ident, expr.span, ctx)
+            if o is not None:
+                return frozenset({o})
+        return frozenset()
     if isinstance(expr, Attr):
         return expr_taint(expr.value, state, ctx)
     if isinstance(expr, Index):
@@ -160,9 +195,12 @@ def _transfer(stmt: Stmt, state: State, ctx: TaintCtx) -> State:
 
     def _bind(names, value) -> None:
         t = expr_taint(value, state, ctx)
+        span = value.span if value is not None else stmt.span
         for name in names:
-            if t:
-                new[name] = t
+            o = _ident_origin(name, span, ctx)   # a credential/PII-named target IS sensitive data
+            tt = t | frozenset({o}) if o is not None else t
+            if tt:
+                new[name] = tt
             else:
                 new.pop(name, None)
 
@@ -221,13 +259,23 @@ def run_function_inter(fn, ctx: TaintCtx) -> tuple[list[Finding], Summary, set]:
     # Shadow-filter the import map for this function (a param/local named `request` is not
     # flask.request) -- same rule as call resolution, avoids false positives.
     local_names = set(fn.params) | {d.var for d in fn.defuse.defs}
-    wctx = replace(ctx, imap={k: v for k, v in ctx.imap.items() if k not in local_names})
+    wctx = replace(
+        ctx,
+        imap={k: v for k, v in ctx.imap.items() if k not in local_names},
+        # a local shadowing a module constant must not pull the constant's secret (a popped
+        # untainted local looks "unbound", so the Name branch would otherwise reach ctx.constants)
+        constants={k: v for k, v in ctx.constants.items() if k not in local_names},
+    )
 
     seed: State = {}
     if ctx.seed_params:
         for i, p in enumerate(fn.params):
             seed[p] = frozenset({Origin(f"param:{i}", (), fn.span, "high",
                                         param_index=i, source_file=fn.source_file)})
+    for p in fn.params:                          # a credential/PII-named param is a real label source
+        o = _ident_origin(p, fn.span, ctx)       # (regardless of seed_params: intra runs get it too)
+        if o is not None:
+            seed[p] = seed.get(p, frozenset()) | frozenset({o})
 
     preds: dict[int, list[int]] = {n: [] for n in cfg.succ}
     for a, outs in cfg.succ.items():

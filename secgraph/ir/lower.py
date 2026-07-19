@@ -90,12 +90,51 @@ def _named_stmts(block) -> list:
 
 # ---- expressions -----------------------------------------------------------------
 
+def _fstring_interpolations(node) -> list:
+    """The ``{expr}`` interpolation expression nodes inside a (possibly concatenated) string,
+    outermost only (a nested f-string in a format spec is lowered by its own interpolation)."""
+    out: list = []
+    for c in node.named_children:
+        if c.type == "interpolation":
+            expr = c.child_by_field_name("expression")
+            if expr is None:
+                named = [n for n in c.named_children if n.type not in ("format_specifier", "type_conversion")]
+                expr = named[0] if named else None
+            if expr is not None:
+                out.append(expr)
+        elif c.type in ("string", "concatenated_string"):  # concatenated_string wraps string children
+            out.extend(_fstring_interpolations(c))
+    return out
+
+
+def _string_content(node) -> str:
+    """The literal content of a plain (non-interpolated) string, escapes included, quotes/prefix
+    excluded -- what a secret classifier should see."""
+    parts: list[str] = []
+
+    def walk(n) -> None:
+        for c in n.named_children:
+            if c.type in ("string_content", "escape_sequence"):
+                parts.append(_text(c))
+            elif c.type in ("string", "concatenated_string"):
+                walk(c)
+    walk(node)
+    return "".join(parts)
+
+
 def _lower_expr(node) -> Expr:
     t = node.type
     span = Span.of(node)
     if t == "identifier":
         return Name(_text(node), span)
     if t in _LITERAL_TYPES:
+        if t in ("string", "concatenated_string"):
+            interps = _fstring_interpolations(node)
+            if interps:
+                # an f-string is NOT an opaque literal: its interpolations carry taint
+                # (`execute(f"... {q}")` is the modern SQLi idiom). Lower them as children.
+                return Unknown("fstring", [_lower_expr(i) for i in interps], span)
+            return Literal(span, text=_string_content(node))   # plain string: carry content for secret scan
         return Literal(span)
     if t == "parenthesized_expression":
         inner = node.named_children
@@ -510,21 +549,38 @@ def _resolve_callee_fqn(node, imap: dict[str, str]) -> Optional[str]:
     return None
 
 
-def _module_globals(root, imap: dict[str, str]) -> dict[str, Optional[str]]:
-    """Module-level ``name = SomeCall(...)`` -> the callee's FQN (or None). Lets the resolver
-    tell a project singleton (`store = Store()`) from a library object (`db = SQLAlchemy()`)."""
-    globs: dict[str, Optional[str]] = {}
+def _module_assignments(root) -> Iterator:
+    """Yield ``(name, right-hand-side node)`` for each top-level ``NAME = <expr>`` assignment
+    with a single identifier target -- the shared scaffold of the global/constant scans below."""
     for node in root.children:
         if node.type != "expression_statement":
             continue
         inner = [c for c in node.named_children if c.type != "comment"]
         if inner and inner[0].type == "assignment":
-            a = inner[0]
-            left = a.child_by_field_name("left")
-            right = a.child_by_field_name("right")
-            if left is not None and left.type == "identifier" and right is not None and right.type == "call":
-                globs[_text(left)] = _resolve_callee_fqn(right.child_by_field_name("function"), imap)
+            left = inner[0].child_by_field_name("left")
+            right = inner[0].child_by_field_name("right")
+            if left is not None and left.type == "identifier" and right is not None:
+                yield _text(left), right
+
+
+def _module_globals(root, imap: dict[str, str]) -> dict[str, Optional[str]]:
+    """Module-level ``name = SomeCall(...)`` -> the callee's FQN (or None). Lets the resolver
+    tell a project singleton (`store = Store()`) from a library object (`db = SQLAlchemy()`)."""
+    globs: dict[str, Optional[str]] = {}
+    for name, right in _module_assignments(root):
+        if right.type == "call":
+            globs[name] = _resolve_callee_fqn(right.child_by_field_name("function"), imap)
     return globs
+
+
+def _module_constants(root) -> dict[str, str]:
+    """Module-level ``NAME = "literal"`` -> the string's content. The #1 home of hardcoded
+    secrets (``settings.py: SECRET_KEY = "..."``) sits outside every function body."""
+    consts: dict[str, str] = {}
+    for name, right in _module_assignments(root):
+        if right.type in ("string", "concatenated_string") and not _fstring_interpolations(right):
+            consts[name] = _string_content(right)
+    return consts
 
 
 def _class_infos(root, imap: dict[str, str]) -> dict[str, list[str]]:
@@ -586,6 +642,7 @@ def lower_source(src: bytes, source_file: str) -> ModuleIR:
     return ModuleIR(
         source_file=source_file, functions=functions, imports=imap,
         globals=_module_globals(root, imap), classes=_class_infos(root, imap),
+        constants=_module_constants(root),
     )
 
 

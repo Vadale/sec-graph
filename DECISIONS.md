@@ -145,3 +145,45 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
   node isn't available there); qualifying names with the class (still collides on overloads and
   couples to graphify's `.method()` labelling); the narrower `</` → `<\/` viz guard (secure but
   not robust — leaves `<!--<script>` able to blank the report).
+
+## ADR-009 — Sensitive-data layers attach to the value (Origin mint), not the IR node
+- 2026-07-19 · Accepted (WP-C1; design consulted with a Fable 5 max agent, reviewer-hardened)
+- **Context:** ROADMAP §11 wants credentials/PII/auth layers and the flagship query
+  `credentials ∈ path.layers AND dangerous-sink ∈ path.layers`. §11's literal wording ("every IR
+  node carries a layers bitmask, union along the path") invites threading labels through the whole
+  IR/engine. But layers are facts about *values*, and the engine already carries value-facts as
+  `Origin` sets on the taint state (`Finding.layers = origin.layers ∪ sink.layers`).
+- **Decision (attachment):** sensitive-data evidence **mints a fresh label-`Origin`** unioned into
+  the value's origin set — it **never mutates** an existing `Origin.layers`. Four localized mint
+  sites in `engine.py`: (1) a source subscript key (`request.form['password']`); (2) a
+  credential/PII-named assignment/for/walrus target; (3) a credential/PII-named parameter
+  (unconditional — a real source even intraprocedurally); (4) a secret string literal or module
+  constant. Label flow across functions is then free via summaries (`return_origins`/`sink_params`
+  already carry Origins). Field-sensitivity-proof: a later k=1 pass changes the `State` key type,
+  not the Origin payload.
+- **The invariant (why mint, not mutate):** a mutated origin would (i) break summary monotonicity
+  (`_summary_leq`) as layer-set elements change across the fixpoint, and (ii) break byte-determinism
+  — `Finding.key` excludes `layers`, so layer-variant origins of one source id would collide under
+  `findings.setdefault` over a hash-ordered frozenset. Guaranteed by construction instead: each
+  minted `source_id` **encodes** its layers, and `layers`/`confidence` are pure functions of the
+  matched set ⇒ colliding keys ⇒ byte-identical Findings. Verified: `analyze` twice is byte-identical.
+- **Decision (matching):** identifiers match **word-based** (tokenise snake/camel, whole token-run
+  + regular plural), never substring — so `tokenizer`/`next_token` never light up credentials; bare
+  ambiguous tokens (`token`/`key`/`salt`) are excluded from the dicts. Secret literals: named
+  formats first (AWS/JWT/PEM/GitHub/Slack/url-creds/Luhn-card), then a generic entropy fallback that
+  is charset-, length- and hash-length-gated (rejects pure-decimal ids and md5/sha digests);
+  deny-values match the *matched span* for named patterns (a real key in a string containing
+  "example" is not suppressed) and the whole literal for the entropy fallback.
+- **Decision (f-string):** a string with interpolations lowers to `Unknown("fstring", [interps])`
+  (a correctness fix, not a layer feature): `execute(f"… {q}")` — the modern SQLi idiom — was
+  previously an opaque `Literal` and a hard false negative.
+- **Kept as tuples, not a bitmask:** `layers` stays `tuple[str,...]` (§11 said integer bitmask); the
+  bitmask fights JSON/provenance readability at MVP scale.
+- **Scope / deferred:** WP-C1 ships the sensitive-data (credentials/PII) layers on flows. The
+  **auth/permissions layer + unguarded-sink** derived finding (decorator/gate/dominator barriers,
+  `find_unguarded_sinks`) is **WP-C2** (next). Also deferred: cross-module imported-constant secrets;
+  raw-text multi-language secret scan reusing `classify_secret` (Phase 8); layer-scoped sanitizers;
+  `self.password = x` label loss (field-sensitivity H2); nested f-string format-spec interpolation.
+- **Rejected:** IR-node bitmask (invasive, re-plumbed by field-sensitivity); post-hoc lexical
+  finding enrichment (presence-in-function ≠ on the tainted value → the flagship degrades to grep);
+  mutating origins in flight (breaks the two guarantees above).

@@ -10,7 +10,16 @@ from typing import Any, Iterable
 
 import yaml
 
-from .model import PropagatorRule, Rules, SanitizerRule, SinkRule, SourceRule
+from .model import (
+    LabelRule,
+    PropagatorRule,
+    Rules,
+    SanitizerRule,
+    SecretConfig,
+    SecretPattern,
+    SinkRule,
+    SourceRule,
+)
 
 
 def _tup(x: Any) -> tuple:
@@ -74,6 +83,37 @@ def _propagator(d: dict, ctx: str) -> PropagatorRule:
     )
 
 
+def _label(layer: str, d: dict, ctx: str) -> LabelRule:
+    return LabelRule(
+        layer=layer,
+        identifiers=_tup(_req(d, "identifiers", ctx)),
+        confidence=d.get("confidence", "medium"),
+    )
+
+
+def _secret_pattern(d: dict, ctx: str) -> SecretPattern:
+    return SecretPattern(
+        id=_req(d, "id", ctx),
+        regex=_req(d, "regex", ctx),
+        layers=_tup(_req(d, "layers", ctx)),
+        confidence=d.get("confidence", "high"),
+        validator=d.get("validator"),
+    )
+
+
+def _secrets(d: dict, ctx: str) -> SecretConfig:
+    return SecretConfig(
+        patterns=tuple(_secret_pattern(p, ctx) for p in (d.get("patterns") or [])),
+        deny_values=_tup(d.get("deny_values")),
+        test_path_globs=_tup(d.get("test_path_globs")),
+        min_length=int(d.get("min_length", 16)),
+        max_length=int(d.get("max_length", 512)),
+        base64_threshold=float(d.get("base64_threshold", 4.5)),
+        hex_threshold=float(d.get("hex_threshold", 3.0)),
+        confidence=d.get("confidence", "medium"),
+    )
+
+
 def load_rule_file(path: Path | str) -> Rules:
     path = Path(path)
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -83,6 +123,9 @@ def load_rule_file(path: Path | str) -> Rules:
     rules.sinks = [_sink(d, ctx) for d in (data.get("sinks") or [])]
     rules.sanitizers = [_sanitizer(d, ctx) for d in (data.get("sanitizers") or [])]
     rules.propagators = [_propagator(d, ctx) for d in (data.get("propagators") or [])]
+    rules.labels = {layer: _label(layer, d, ctx) for layer, d in (data.get("labels") or {}).items()}
+    sec = data.get("secrets")
+    rules.secrets = _secrets(sec, ctx) if sec else None
     return rules
 
 

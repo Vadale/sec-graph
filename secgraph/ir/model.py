@@ -59,6 +59,7 @@ class Name:
 @dataclass(slots=True)
 class Literal:
     span: Span
+    text: Optional[str] = None   # the string's content for plain (non-f) string literals; else None
 
 
 @dataclass(slots=True)
@@ -252,6 +253,7 @@ class ModuleIR:
     imports: dict[str, str] = field(default_factory=dict)   # local name -> fully-qualified name
     globals: dict[str, Optional[str]] = field(default_factory=dict)  # module-level `x = Call()` -> callee FQN
     classes: dict[str, list[str]] = field(default_factory=dict)      # class name -> resolved base FQNs
+    constants: dict[str, str] = field(default_factory=dict)          # module-level `NAME = "literal"` -> content
 
 
 # ---- helpers ---------------------------------------------------------------------

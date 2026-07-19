@@ -95,7 +95,7 @@ def run_project_full(
                 fn = index.fn_of[k]
                 module = index.module_of[k[0]]
                 ctx = TaintCtx(imap=module.imports, rules=rules, summaries=summaries,
-                               sites=sites.get(k, {}), seed_params=True)
+                               sites=sites.get(k, {}), seed_params=True, constants=module.constants)
                 fs, summ, ts = run_function_inter(fn, ctx)
                 for f in fs:
                     findings.setdefault(f.key, f)

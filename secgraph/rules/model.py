@@ -52,6 +52,39 @@ class PropagatorRule:
     to: str = "return"
 
 
+@dataclass(frozen=True, slots=True)
+class LabelRule:
+    """Identifier dictionary for one sensitive-data layer (credentials/pii). ``identifiers`` are
+    matched word-based (token-run, not substring) so ``tokenizer`` never lights up ``token``."""
+
+    layer: str
+    identifiers: tuple[str, ...]
+    confidence: str = "medium"
+
+
+@dataclass(frozen=True, slots=True)
+class SecretPattern:
+    id: str
+    regex: str                             # matched against a string literal's content
+    layers: tuple[str, ...]
+    confidence: str = "high"
+    validator: Optional[str] = None        # e.g. "luhn" for credit cards
+
+
+@dataclass(frozen=True, slots=True)
+class SecretConfig:
+    """Secret-literal detection: named formats first, entropy fallback charset-gated."""
+
+    patterns: tuple[SecretPattern, ...] = ()
+    deny_values: tuple[str, ...] = ()      # placeholder regexes (changeme, <...>, ${...})
+    test_path_globs: tuple[str, ...] = ()  # confidence -> low under these (detect, never hide)
+    min_length: int = 16
+    max_length: int = 512
+    base64_threshold: float = 4.5
+    hex_threshold: float = 3.0
+    confidence: str = "medium"             # entropy-fallback confidence
+
+
 @dataclass(slots=True)
 class Rules:
     """Aggregated rules from one or more packs."""
@@ -60,10 +93,15 @@ class Rules:
     sinks: list[SinkRule] = field(default_factory=list)
     sanitizers: list[SanitizerRule] = field(default_factory=list)
     propagators: list[PropagatorRule] = field(default_factory=list)
+    labels: dict[str, LabelRule] = field(default_factory=dict)   # layer -> identifier dict
+    secrets: Optional[SecretConfig] = None
 
     def extend(self, other: "Rules") -> "Rules":
         self.sources.extend(other.sources)
         self.sinks.extend(other.sinks)
         self.sanitizers.extend(other.sanitizers)
         self.propagators.extend(other.propagators)
+        self.labels.update(other.labels)
+        if other.secrets is not None:
+            self.secrets = other.secrets
         return self

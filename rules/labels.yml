@@ -1,4 +1,52 @@
-# Deterministic layer dictionaries (identifier regexes, entropy thresholds, formats).
-# See ROADMAP.md Section 11 (Phase 4). Stub - to be filled in Phase 4.
+# Sensitive-data layer dictionaries (ROADMAP.md Section 11, Phase 4).
+# Identifiers are matched WORD-BASED (whole token-run, not substring): `tokenizer` and
+# `next_token` do NOT match the credentials layer. Bare ambiguous tokens (`token`, `key`,
+# `salt`) are deliberately absent; only unambiguous single words and compound identifiers
+# are listed, to keep the map clean. Broader weak-term bigram matching is deferred.
 version: 1
-layers: {}
+labels:
+  credentials:
+    confidence: medium
+    identifiers:
+      - password
+      - passwd
+      - pwd
+      - passphrase
+      - secret
+      - credential
+      - credentials
+      - api_key
+      - apikey
+      - secret_key
+      - private_key
+      - access_token
+      - refresh_token
+      - auth_token
+      - client_secret
+      - session_key
+      - encryption_key
+      - bearer
+      - jwt
+      - ssh_key
+  pii:
+    confidence: medium
+    identifiers:
+      - email
+      - email_address
+      - ssn
+      - social_security
+      - dob
+      - date_of_birth
+      - credit_card
+      - card_number
+      - iban
+      - passport
+      - passport_number
+      - tax_id
+      - phone_number
+      - first_name
+      - last_name
+      - full_name
+      - street_address
+      - home_address
+      - billing_address
