@@ -159,9 +159,11 @@ def load_rules(source: Path | str | Iterable[Path | str]) -> Rules:
 
 
 def default_rules_dir() -> Path:
-    """The repo-root ``rules/`` directory (packaged rule data lives there in dev).
-
-    NOTE: for a wheel release (Phase 8) this must become importlib package data; today it
-    resolves relative to the source tree, which is correct for the editable dev install.
-    """
-    return Path(__file__).resolve().parents[2] / "rules"
+    """The bundled rule packs. Resolves to the repo-root ``rules/`` in an editable dev checkout, and
+    to the wheel's packaged copy (``secgraph/_rule_packs``, force-included by hatchling and located
+    via ``importlib.resources``) in an installed release."""
+    dev = Path(__file__).resolve().parents[2] / "rules"
+    if dev.is_dir():
+        return dev
+    from importlib.resources import files
+    return Path(str(files("secgraph") / "_rule_packs"))

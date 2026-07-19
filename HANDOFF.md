@@ -2,10 +2,11 @@
 
 ## Where we are
 Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 + Phase 6 (MCP) + Phase 5 (graph viz) +
-Tier-3 typing complete. 104 tests green**, quarantine wall intact, reviewed + simplify-passed
-(Tier-3 self-verified, additive — see diary 14). **Phases 4, 5, 6 are done** — the whole mission
-pipeline works end-to-end: the interactive graph map + LLM-triage-over-MCP. Dev env `.venv`
-(`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
+Tier-3 typing + Phase 8 (packaging) complete. 104 tests green**, quarantine wall intact. **The MVP
+is functionally complete**: `secgraph analyze` → the interactive layered graph map + `taint.json`;
+`secgraph serve` = MCP triage; credentials/PII + auth/unguarded layers; deterministic core; **a
+`pip install`-able wheel** (`secgraph-0.1.0`, `uv build --wheel`). ROADMAP phases 0–6 + 8 delivered.
+Dev env `.venv` (`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
 
 `secgraph analyze <path>` now produces the **three artifacts + the demo**:
 `graph.json` (graphify's entity graph, coarsely annotated) · `taint.json` (fine, statement-level
@@ -51,19 +52,22 @@ findings with code slices + trace) · `secgraph.html` (self-contained layered ma
 See `diary/2026-07-19-13-viz.md` (Phase 5), `-12-mcp.md`, `-11-wpc2.md`, `-10-wpc1.md`, `-06-killgate.md`.
 
 ## Decisions locked
-`DECISIONS.md` ADR-000..012 (009 = sensitive-data layers via Origin mint; 010 = auth barriers +
-unguarded; 011 = MCP thin-wrapper-over-pure-view; 012 = hand-rolled Canvas graph viz, no library).
+`DECISIONS.md` ADR-000..013 (010 = auth barriers + unguarded; 011 = MCP thin-wrapper-over-pure-view;
+012 = hand-rolled Canvas graph viz, no library; 013 = packaging bundles the data, keeps the layout).
 
-## Next session — pick one  (Alessandro's order: B done → C next)
-### C. Phase 8 — packaging  ← next
-Package `rules/` **and the `viz/` map.css/map.js assets** as importlib package data (they're read
-from `__file__`-relative paths today — fine for the editable dev install, must become
-`importlib.resources` for a wheel); a `pip install`-able wheel; CI publish.
+## Next session — deferred refinements (MVP complete; B + C done)
+### A. Phase 7 — entrypoint / attack-surface recognizers
+Flask routes, FastAPI `Depends(get_current_user)` barriers, per-framework entry detection. Also the
+**sound fix for the unguarded-sink entrypoint-scope caveat** (a helper reached only from a guarded
+route currently reads unguarded) — via entrypoint→source barrier reachability.
 
-### D. Resolver precision (lower priority, after packaging)
-Tier-3 **generics** (`Optional[User]`/`Union` → inner type; skip containers). **H2**
-field-sensitivity (`self.x = tainted` laundering through an untracked channel). Tier-3 typing itself
-(bare + dotted annotations) shipped — see diary 14.
+### B. Resolver / taint precision
+Tier-3 **generics** (`Optional[User]`/`Union` → inner type; skip containers). **H2** field-sensitivity
+(`self.x = tainted` laundering through an untracked channel — the `AccessPath` k=1 model exists).
+
+### C. CI / release
+Wire the wheel build + publish into CI; a pinned real-repo benchmark harness in `tests/benchmarks/`
+(the KILL-GATE repos were cloned ad-hoc — pin them for regression).
 
 ### C. Resolver/summary precision (lower priority)
 - **Tier-3 annotation typing** (`def f(u: User)`) — the fastapi UNK/TRR mover (deferred; Fable

@@ -280,3 +280,22 @@ one. Format: ID · date · status · decision · why · alternatives rejected.
 - **Rejected:** inlining vis-network/D3/cytoscape (violates self-containment); SVG (DOM-node blowup
   at scale); rendering the full codebase by default (the hairball trap — the map would bury the
   findings that are the entire point).
+
+## ADR-013 — Packaging: bundle the data, keep the dev layout (Phase 8)
+- 2026-07-19 · Accepted (Phase 8)
+- **Context:** the analysis needs two kinds of data at runtime — the YAML **rule packs** (repo-root
+  `rules/`, referenced by CLAUDE.md/docs/tests) and the **viz assets** (`secgraph/viz/map.css`,
+  `map.js`). A `pip install`-able wheel must ship both, but moving `rules/` would churn the
+  documented layout.
+- **Decision:** hatchling **force-includes** the repo-root `rules/` into the wheel at
+  `secgraph/_rule_packs`; the viz assets ship as package `artifacts` (they already live under the
+  package). `default_rules_dir()` **dual-resolves**: the repo-root `rules/` in an editable dev
+  checkout (`parents[2]/"rules"` exists), else the packaged copy via
+  `importlib.resources.files("secgraph")/"_rule_packs"`. `viz/__init__.py` reads its assets
+  `__file__`-relative, which works in both. Version bumped `0.0.0 → 0.1.0` (alpha).
+- **Verified:** `uv build --wheel` produces `secgraph-0.1.0-py3-none-any.whl` containing all 4 rule
+  packs + both viz assets; a fresh-venv install + `secgraph analyze` **run from outside the repo**
+  emits the 3 artifacts, resolving the **packaged** `_rule_packs` (not the dev tree).
+- **Rejected:** moving `rules/` under the package (churns the documented "where things live" +
+  every reference); a zip-safe install (the loader globs `*.yml`, which needs a real filesystem
+  path — fine, pip installs unzipped).

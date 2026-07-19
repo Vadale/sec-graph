@@ -1,6 +1,6 @@
 [project]
 name = "secgraph"
-version = "0.0.0"
+version = "0.1.0"
 description = "Local taint/data-flow security map built on graphify, with layered visualization and MCP triage."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,3 +31,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["secgraph"]
+# non-.py data shipped in the wheel: the viz assets live under the package (included by default);
+# the rule packs live at the repo root in dev, so map them into the package for a release.
+artifacts = ["secgraph/viz/*.css", "secgraph/viz/*.js"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"rules" = "secgraph/_rule_packs"
