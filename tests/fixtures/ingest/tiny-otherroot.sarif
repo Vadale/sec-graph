@@ -1,0 +1,23 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "Semgrep", "semanticVersion": "1.60.0", "rules": [
+        { "id": "python.lang.security.sqli",
+          "properties": { "tags": ["CWE-89"], "precision": "high" },
+          "defaultConfiguration": { "level": "error" } } ] } },
+      "results": [
+        { "ruleId": "python.lang.security.sqli", "level": "error",
+          "message": { "text": "SARIF produced from a different cwd (paths carry a `repo/` prefix)." },
+          "locations": [ { "physicalLocation": {
+            "artifactLocation": { "uri": "repo/backend/db.py" }, "region": { "startLine": 12 } } } ],
+          "codeFlows": [ { "threadFlows": [ { "locations": [
+            { "location": { "physicalLocation": {
+              "artifactLocation": { "uri": "repo/backend/app.py" }, "region": { "startLine": 17 } } } },
+            { "location": { "physicalLocation": {
+              "artifactLocation": { "uri": "repo/backend/db.py" }, "region": { "startLine": 12 } } } }
+          ] } ] } ] }
+      ]
+    }
+  ]
+}

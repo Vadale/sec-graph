@@ -141,10 +141,10 @@ function findingVisible(f){
   return (f.layers||[]).some(l=>DATA_LAYERS.has(l) && activeLayers.has(l));
 }
 function visibleNodes(){
-  if(fullGraph || FIND.length===0) return [...N.values()];
+  if(fullGraph || FIND.length===0 || NEIGH.size===0) return [...N.values()];   // no bind -> full graph, never blank
   return [...N.values()].filter(n=>NEIGH.has(n));
 }
-function nodeShown(n){ return fullGraph || FIND.length===0 || NEIGH.has(n); }
+function nodeShown(n){ return fullGraph || FIND.length===0 || NEIGH.size===0 || NEIGH.has(n); }
 function secNodesOf(){ const s=new Set();
   for(const f of FIND){ if(!findingVisible(f))continue; if(f._src)s.add(f._src); if(f._sink)s.add(f._sink); } return s; }
 

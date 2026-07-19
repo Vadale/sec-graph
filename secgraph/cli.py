@@ -9,17 +9,35 @@ app = typer.Typer(
 
 
 @app.command()
-def analyze(path: str, out_dir: str = "graphify-out") -> None:
-    """Analyze PATH: graph.json (annotated) + taint.json + secgraph.html."""
+def analyze(
+    path: str,
+    out_dir: str = "graphify-out",
+    sarif: list[str] = typer.Option(None, "--sarif", help="Ingest findings from a SARIF file (repeatable)."),
+    semgrep_json: list[str] = typer.Option(None, "--semgrep-json", help="Ingest semgrep --json output (repeatable)."),
+) -> None:
+    """Analyze PATH: graph.json (annotated) + taint.json + secgraph.html. With --sarif/--semgrep-json,
+    ingest external SAST findings (the taint engine is skipped); otherwise run the built-in engine."""
     # Lazy import so `scan`/`view`/`--help` never pay graphify's import cost.
-    from secgraph.project import analyze_project
+    from secgraph.project import analyze_ingest, analyze_project
 
     try:
-        r = analyze_project(path, out_dir)
+        if sarif or semgrep_json:
+            r = analyze_ingest(path, out_dir, sarif, semgrep_json)
+        else:
+            r = analyze_project(path, out_dir)
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         typer.secho(f"error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
+    if "report" in r:                                        # ingest mode: the binding report
+        rep, b = r["report"], r["binding"]
+        tools = sorted({t for inp in rep.inputs for t in inp["tools"]}) or ["?"]
+        bound = b["span"] + b["nearest-def"] + b["file"]
+        typer.echo(f"Ingested {rep.n_findings} finding(s) from {', '.join(tools)} — "
+                   f"bound {bound}/{rep.n_findings} (span {b['span']}, nearest-def {b['nearest-def']}, "
+                   f"file {b['file']}), {b['none']} unbound")
+        for d in rep.dropped[:3]:
+            typer.secho(f"  dropped: {d['uri']} ({d['reason']})", fg=typer.colors.YELLOW)
     typer.echo(f"Wrote {r['graph_json']}")
     typer.echo(f"      {r['taint_json']}")
     typer.echo(f"      {r['html']}   ({r['findings']} finding(s), {r['unguarded']} unguarded)")

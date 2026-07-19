@@ -51,12 +51,22 @@ class TaintView:
         f = self.by_id.get(path_id)
         if f is None:
             return {"error": f"unknown path_id {path_id!r}"}
-        sink_file = f.get("sink_file") or f["source_file"]
         hashes = f.get("file_hashes", {})
-        windows = [
-            self._window("source", f["source_file"], f["source_line"], context_lines, hashes.get(f["source_file"])),
-            self._window("sink", sink_file, f["sink_line"], context_lines, hashes.get(sink_file)),
-        ]
+        hops = f.get("hops")
+        if hops:                                        # ingested paths carry per-hop locations
+            windows, seen = [], set()
+            for i, h in enumerate(hops):
+                if (h["file"], h["line"]) in seen:
+                    continue
+                seen.add((h["file"], h["line"]))
+                role = "source" if i == 0 else "sink" if i == len(hops) - 1 else "hop"
+                windows.append(self._window(role, h["file"], h["line"], context_lines, hashes.get(h["file"])))
+        else:
+            sink_file = f.get("sink_file") or f["source_file"]
+            windows = [
+                self._window("source", f["source_file"], f["source_line"], context_lines, hashes.get(f["source_file"])),
+                self._window("sink", sink_file, f["sink_line"], context_lines, hashes.get(sink_file)),
+            ]
         return {"id": path_id, "cwe": f.get("cwe"), "layers": f.get("layers", []),
                 "confidence": f.get("confidence"), "unguarded": f.get("unguarded"),
                 "guards": f.get("guards", []), "trace": f.get("trace", []), "windows": windows}

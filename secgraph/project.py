@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from .ir.join import join_modules
 from .ir.model import ModuleIR
 from .taint.model import Finding
+
+_LINE = re.compile(r"^L(\d+)$")
 
 
 def _read_slice(root: Path, rel_file: str, line: int) -> str:
@@ -69,86 +72,137 @@ def _enclosing_node(
     return best_id
 
 
+def _bind_node(file: str, line: int, by_file, code_nodes, file_nodes) -> tuple[str | None, str]:
+    """Bind a finding's (file, line) to a graph node, structurally only (ADR-008/014):
+    span (Python IR) -> nearest preceding def-line (any language graphify parsed; pitfall #1 gives
+    no end lines) -> the file node -> none."""
+    got = _enclosing_node(by_file, file, line)
+    if got is not None:
+        return got, "span"
+    best_line, best_id = -1, None
+    for def_line, node_id in code_nodes.get(file, ()):
+        if def_line <= line and def_line > best_line:
+            best_line, best_id = def_line, node_id
+    if best_id is not None:
+        return best_id, "nearest-def"
+    if file in file_nodes:
+        return file_nodes[file], "file"
+    return None, "none"
+
+
 def _annotate_graph_json(
-    graph_json: Path, findings: list[Finding], modules: list[ModuleIR]
-) -> list[tuple[str | None, str | None]]:
-    """Annotate graph.json in place; return each finding's ``(source_node_id, sink_node_id)`` so
-    taint.json can carry the sound node binding (used by the MCP ``get_function_taint``)."""
+    graph_json: Path, findings: list[dict], modules: list[ModuleIR]
+) -> dict[str, int]:
+    """Bind each finding DICT to graph nodes (stamping ``source_node``/``sink_node`` + a
+    ``binding:*`` provenance tag in place), annotate ``sec_layers`` + one hyperedge per bound
+    finding, and leave the node count unchanged. Returns the binding-method counts (report)."""
     data = json.loads(graph_json.read_text(encoding="utf-8"))
     nodes = data.get("nodes", [])
     n_before = len(nodes)
 
     join_modules(modules, nodes)          # bind FunctionIR.graphify_node by (file, def-line)
     node_by_id = {n["id"]: n for n in nodes}
-    by_file: dict[str, list[tuple[int, int, str]]] = {}
+    by_file: dict[str, list[tuple[int, int, str]]] = {}     # (Python IR spans) for the tightest join
     for module in modules:
         for fn in module.functions:
             if fn.graphify_node is not None:
                 by_file.setdefault(fn.source_file, []).append(
                     (fn.span.start_line, fn.span.end_line, fn.graphify_node))
+    code_nodes: dict[str, list[tuple[int, str]]] = {}       # graphify function nodes (nearest-def)
+    file_nodes: dict[str, str] = {}                         # graphify file nodes (file fallback)
+    for n in nodes:
+        if n.get("file_type") != "code":
+            continue
+        label, sf = str(n.get("label", "")), n.get("source_file")
+        m = _LINE.match(str(n.get("source_location", "")))
+        if sf is None:
+            continue
+        if label.endswith("()") and m:
+            code_nodes.setdefault(sf, []).append((int(m.group(1)), n["id"]))
+        elif label == sf.rsplit("/", 1)[-1]:                 # the file's own node (label == basename)
+            file_nodes.setdefault(sf, n["id"])
 
     hyperedges = data.setdefault("hyperedges", [])
-    node_pairs: list[tuple[str | None, str | None]] = []
+    counts = {"span": 0, "nearest-def": 0, "file": 0, "none": 0}
     for i, f in enumerate(findings):
-        src = node_by_id.get(_enclosing_node(by_file, f.source_file, f.source_line))
-        sink = node_by_id.get(_enclosing_node(by_file, f.sink_file or f.source_file, f.sink_line))
-        node_pairs.append((src["id"] if src is not None else None,
-                           sink["id"] if sink is not None else None))
-        for node in (src, sink):
+        sink_file = f.get("sink_file") or f["source_file"]
+        src_id, _ = _bind_node(f["source_file"], f["source_line"], by_file, code_nodes, file_nodes)
+        sink_id, sink_m = _bind_node(sink_file, f["sink_line"], by_file, code_nodes, file_nodes)
+        f["source_node"], f["sink_node"] = src_id, sink_id
+        counts[sink_m] += 1
+        f.setdefault("provenance", []).append(f"binding:{sink_m}")
+        for nid in {src_id, sink_id}:
+            node = node_by_id.get(nid)
             if node is not None:
-                node["sec_layers"] = sorted(set(node.get("sec_layers", [])) | set(f.layers))
-        if src is not None and sink is not None and src is not sink:
+                node["sec_layers"] = sorted(set(node.get("sec_layers", [])) | set(f.get("layers", [])))
+        if src_id and sink_id and src_id != sink_id:
             hyperedges.append({
-                "id": f"sec-path-{i}",
-                "kind": "taint-path",       # namespaced; distinguishes our paths from graphify's
-                "label": f"{f.source_id} -> {f.sink_id}" + (f" ({f.cwe})" if f.cwe else ""),
-                "nodes": sorted({src["id"], sink["id"]}),
+                "id": f"sec-path-{i}", "kind": "taint-path",
+                "label": f"{f['source_id']} -> {f['sink_id']}" + (f" ({f['cwe']})" if f.get("cwe") else ""),
+                "nodes": sorted({src_id, sink_id}),
             })
 
     assert len(data.get("nodes", [])) == n_before, "projection changed graph.json node count"
     graph_json.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    return node_pairs
+    return counts
+
+
+def emit_artifacts(path: Path | str, out_dir: Path | str, finding_dicts: list[dict],
+                   modules: list[ModuleIR], engine: dict) -> dict:
+    """The shared projection tail (both the built-in engine and SARIF ingestion target it): run
+    graphify, assign ids, bind + annotate graph.json, write taint.json + the HTML map."""
+    from . import graphify_adapter
+    from .viz import render_html
+
+    path, out_dir = Path(path), Path(out_dir)
+    result = graphify_adapter.run_graphify(path, out_dir)     # writes out_dir/graph.json
+    for i, f in enumerate(finding_dicts):                     # callers pass findings pre-sorted
+        f["id"] = f"path-{i:04d}"
+    counts = _annotate_graph_json(result.graph_json, finding_dicts, modules)
+
+    taint_json = out_dir / "taint.json"
+    taint_json.write_text(
+        # absolute root so `secgraph serve` reads slices regardless of its cwd (gitignored artifact)
+        json.dumps({"version": 1, "root": str(path.resolve()), "engine": engine,
+                    "findings": finding_dicts}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    graph_data = json.loads(result.graph_json.read_text(encoding="utf-8"))
+    (out_dir / "secgraph.html").write_text(render_html(graph_data, finding_dicts, str(path)), encoding="utf-8")
+    return {
+        "findings": len(finding_dicts),
+        "unguarded": sum(1 for f in finding_dicts if f.get("unguarded")),
+        "binding": counts,
+        "graph_json": result.graph_json, "taint_json": taint_json, "html": out_dir / "secgraph.html",
+    }
 
 
 def analyze_project(path: Path | str, out_dir: Path | str = "graphify-out") -> dict:
-    """Run graphify + interprocedural taint over ``path`` and write graph.json (annotated),
-    taint.json, and secgraph.html into ``out_dir``."""
-    from . import graphify_adapter
+    """Built-in fallback: run graphify + the interprocedural taint engine (ADR-014 -- used when no
+    external SARIF is supplied), and emit the 3 artifacts."""
     from .ir import build_project_ir
     from .rules import default_rules_dir, load_rules
     from .taint import run_project
-    from .viz import render_html
 
     path = Path(path)
-    out_dir = Path(out_dir)
-    rules = load_rules(default_rules_dir())
-
     modules = build_project_ir(path)
-    findings = run_project(modules, rules)
-    result = graphify_adapter.run_graphify(path, out_dir)     # writes out_dir/graph.json
-    node_pairs = _annotate_graph_json(result.graph_json, findings, modules)
+    findings = run_project(modules, load_rules(default_rules_dir()))
+    finding_dicts = [_finding_dict(f, path) for f in findings]
+    return emit_artifacts(path, out_dir, finding_dicts, modules, {"mode": "builtin"})
 
-    finding_dicts = [
-        {"id": f"path-{i:04d}", **_finding_dict(f, path),
-         "source_node": node_pairs[i][0], "sink_node": node_pairs[i][1]}
-        for i, f in enumerate(findings)
-    ]
-    taint_json = out_dir / "taint.json"
-    taint_json.write_text(
-        # absolute root so `secgraph serve` reads slices correctly regardless of its cwd
-        # (taint.json is a gitignored local artifact, so a machine path is fine)
-        json.dumps({"version": 1, "root": str(path.resolve()), "findings": finding_dicts},
-                   indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    html_path = out_dir / "secgraph.html"
-    graph_data = json.loads(result.graph_json.read_text(encoding="utf-8"))   # the annotated graph
-    html_path.write_text(render_html(graph_data, finding_dicts, str(path)), encoding="utf-8")
 
-    return {
-        "findings": len(findings),
-        "unguarded": sum(1 for f in findings if not f.guards),
-        "graph_json": result.graph_json,
-        "taint_json": taint_json,
-        "html": html_path,
-    }
+def analyze_ingest(path: Path | str, out_dir: Path | str, sarif_paths, semgrep_paths) -> dict:
+    """Pivot path (ADR-014): ingest external SAST findings (SARIF / semgrep JSON) and render them
+    through the same projection + map + MCP pipeline. graphify + the IR still run (map substrate +
+    span binding + Phase-10 enrichment); the taint engine does not."""
+    from .ingest import ingest_findings
+    from .ir import build_project_ir
+    from .rules import default_rules_dir, load_rules
+
+    path = Path(path)
+    rules = load_rules(default_rules_dir())
+    modules = build_project_ir(path)
+    findings, report = ingest_findings(path, sarif_paths, semgrep_paths, rules)
+    r = emit_artifacts(path, out_dir, findings, modules, {"mode": "ingest", "inputs": report.inputs})
+    r["report"] = report
+    return r

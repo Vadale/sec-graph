@@ -1,0 +1,24 @@
+{
+  "version": "1.60.0",
+  "results": [
+    {
+      "check_id": "python.flask.security.injection.tainted-sql-string",
+      "path": "db.py",
+      "start": { "line": 12, "col": 12 },
+      "end": { "line": 12, "col": 40 },
+      "extra": {
+        "message": "Detected user input flowing into a raw SQL string.",
+        "severity": "ERROR",
+        "lines": "    return conn.execute(query).fetchall()",
+        "metadata": { "cwe": ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"], "confidence": "HIGH" },
+        "dataflow_trace": {
+          "taint_source": ["CliLoc", [{ "path": "app.py", "start": { "line": 17 }, "end": { "line": 17 } }, "request.args[\"id\"]"]],
+          "intermediate_vars": [
+            { "location": { "path": "db.py", "start": { "line": 11 }, "end": { "line": 11 } }, "content": "query" }
+          ],
+          "taint_sink": ["CliLoc", [{ "path": "db.py", "start": { "line": 12 }, "end": { "line": 12 } }, "conn.execute(query)"]]
+        }
+      }
+    }
+  ]
+}

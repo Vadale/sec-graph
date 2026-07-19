@@ -1,12 +1,12 @@
 # HANDOFF — state for the next session
 
 ## Where we are
-Bootstrap + **WP0–WP3-b + WP-A + WP-B + WP-C1 + WP-C2 + Phase 6 (MCP) + Phase 5 (graph viz) +
-Tier-3 typing + Phase 8 (packaging) complete. 104 tests green**, quarantine wall intact. **The MVP
-is functionally complete**: `secgraph analyze` → the interactive layered graph map + `taint.json`;
-`secgraph serve` = MCP triage; credentials/PII + auth/unguarded layers; deterministic core; **a
-`pip install`-able wheel** (`secgraph-0.1.0`, `uv build --wheel`). ROADMAP phases 0–6 + 8 delivered.
-Dev env `.venv` (`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
+Bootstrap + phases 0–8 (MVP) + Tier-3 typing + **Phase 9 (SARIF/Semgrep ingestion — the PIVOT
+part 1) complete. 113 tests green**, quarantine wall intact. `secgraph analyze <path> --sarif F`
+ingests external SAST findings through the map + MCP pipeline; the built-in taint engine is the
+no-SARIF fallback. Also shipped: interactive graph map, MCP triage, credentials/PII + auth/unguarded
+layers, a `pip install`-able wheel (`secgraph-0.1.0`). Dev env `.venv`
+(`uv pip install -e ".[dev]"`), `graphifyy==0.9.6`.
 
 `secgraph analyze <path>` now produces the **three artifacts + the demo**:
 `graph.json` (graphify's entity graph, coarsely annotated) · `taint.json` (fine, statement-level
@@ -56,22 +56,25 @@ See `diary/2026-07-19-13-viz.md` (Phase 5), `-12-mcp.md`, `-11-wpc2.md`, `-10-wp
 viz; 013 = packaging bundles the data; **014 = PIVOT — map + local-LLM-triage layer over ANY SAST via
 SARIF ingestion; the taint engine is demoted to the built-in Python fallback**).
 
-## Next session — the PIVOT (ADR-014, planned with a Fable 5 max agent → ROADMAP Phases 9–10)
-The MVP (phases 0–8) is done and stays; the product is now the **map + enrichment + MCP triage over
-ingested SARIF**, not our engine. Open with `new-wp` and write the executable acceptance first.
+## Next session — the PIVOT (ADR-014). Phase 9 DONE; Phase 10 next.
+The product is the **map + enrichment + MCP triage over ingested SARIF**. `secgraph analyze <path>
+--sarif F` works end-to-end (113 tests); the engine is the no-SARIF fallback.
 
-### Phase 9 — SARIF / Semgrep ingestion  ← next
-`secgraph/ingest/{sarif,semgrep,normalize}.py`: map SARIF 2.1.0 `results`+`codeFlows` / semgrep
-`dataflow_trace` → the normalized finding dict; the URI normalizer + **root clamp**; refactor
-`project.py` to a dict-consuming `emit_artifacts` tail with the structural binding ladder
-(span→nearest-def→file→none). `analyze <path> --sarif F`. **The trap:** zero-bind → blank map — see
-ADR-014 (normalizer + suffix-rescue + binding report + map empty-NEIGH full-graph fallback). Reuses
-graphify (substrate), the projection join (ADR-008), viz, MCP unchanged.
+### Phase 10 — Layer enrichment over ingested findings  ← next
+`secgraph/ingest/enrich.py`: run `ident_label`/`classify_secret` (from `rules/labels.py`) over the
+ingested findings' source/sink/**hop** lines to add credentials/PII layers (add-only, confidence ≤
+medium, `enrich:lexical@…` provenance); run `guard_map` (from `taint/guards.py`) on Python sinks via
+the enclosing `FunctionIR` from the project IR (already built in `analyze_ingest`) → set
+`guards`/`unguarded`/`guard_status:"analyzed"`; everything else → the honest **tri-state**
+`guard_status:"unknown"` (`unguarded:false, guards:[]`) rendered WITHOUT a glow OR a green ring
+(map.js badge "guards unknown"; `_rank` unguarded<unknown<guarded; `find_unguarded_sinks` excludes
+unknowns by default + `unknown_count`). Engine-path output stays bit-identical (it never emits
+`unknown`). Wire enrichment into `analyze_ingest` after `ingest_findings`, before `emit_artifacts`.
+See ROADMAP Phase 10 Build Prompt + ADR-014.
 
-### Phase 10 — Layer enrichment over ingested findings
-`secgraph/ingest/enrich.py`: `ident_label`/`classify_secret` on the flow's source/sink/hop lines +
-`guard_map` on Python sinks; the honest **guard tri-state** (`analyzed`/`unknown`) rendered without a
-false glow or a false green ring. The differentiator over raw SAST output.
+### Icebox (engine is fallback)
+H2 field-sensitivity, Tier-3 generics; CI wheel publish; a pinned real-repo benchmark. Nearest-def
+binding can mis-bind within a file (coarse fallback, same-file only — reviewer LOW, acceptable).
 
 ### Icebox (engine is fallback now)
 H2 field-sensitivity, Tier-3 generics, kwargs mapping — only if a fallback bug demands it. CI wheel

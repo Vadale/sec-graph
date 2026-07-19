@@ -1,0 +1,16 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    { "tool": { "driver": { "name": "Bandit", "rules": [] } },
+      "results": [
+        { "ruleId": "bad-locations-string", "locations": ["oops"] },
+        { "ruleId": "coerced-nan-line", "level": "warning",
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "db.py" }, "region": { "startLine": "NaN" } } } ] },
+        { "ruleId": "good", "level": "warning",
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "db.py" }, "region": { "startLine": 12 } } } ] },
+        { "ruleId": "bad-codeflows-shape", "level": "warning",
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "app.py" }, "region": { "startLine": 17 } } } ],
+          "codeFlows": [ 123 ] }
+      ] }
+  ]
+}
