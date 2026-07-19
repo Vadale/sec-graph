@@ -107,7 +107,7 @@ let alpha=1;
 function tick(nodes, links){
   const qt=buildQT(nodes);
   for(const n of nodes){ if(n===drag) continue;
-    repulse(qt,n,0.85,(n.isFile?2600:900)*alpha);
+    repulse(qt,n,0.85,(n.isFile?3000:1300)*alpha);
     const g=comm.get(n.community||0);                     // community anchor (weak: position, not collapse)
     n.vx += (g.cx-n.x)*0.026*alpha; n.vy += (g.cy-n.y)*0.026*alpha;
     n.vx += (-n.x)*0.006*alpha; n.vy += (-n.y)*0.006*alpha;   // gentle global centering
@@ -123,7 +123,7 @@ function tick(nodes, links){
   if(nodes.length<=700){                                  // pairwise collision -> readable, no overlap
     for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
       const a=nodes[i],b=nodes[j];let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
-      const min=a.r+b.r+34; if(d<min){const p=(min-d)/d*0.5*dx,q=(min-d)/d*0.5*dy;
+      const min=a.r+b.r+48; if(d<min){const p=(min-d)/d*0.5*dx,q=(min-d)/d*0.5*dy;
         if(a!==drag){a.x-=p;a.y-=q;} if(b!==drag){b.x+=p;b.y+=q;}}
     }
   }
@@ -193,8 +193,9 @@ function draw(){
   // taint routes
   for(const f of ROUTES){ if(!findingVisible(f))continue; if(focusF&&f!==focusF)continue;
     const s=f._src,t=f._sink; if(!nodeShown(s)||!nodeShown(t))continue;
-    drawRoute(s,t,f,focusF?1:dim(s));
-  }
+    if(s===t && f.source_line===f.sink_line) continue;   // a located finding (no data-flow, e.g. a
+    drawRoute(s,t,f,focusF?1:dim(s));                     // pattern-match SAST) is a POINT -> the node is
+  }                                                       // the mark; a self-loop arc would be pure noise
   // nodes
   for(const n of N.values()){ if(!nodeShown(n))continue;
     const a=dim(n); if(a<=0.02)continue;
@@ -211,10 +212,8 @@ function draw(){
     if(n.isFile){ctx.beginPath();rrect(x-rr,y-rr,rr*2,rr*2,3);ctx.fill();
       ctx.lineWidth=1;ctx.strokeStyle=PAL.line;ctx.stroke();}
     else{ctx.beginPath();ctx.arc(x,y,rr,0,6.2832);ctx.fill();}
-    if(on&&n.guarded&&!n.unguarded){ctx.lineWidth=2;ctx.strokeStyle="#2a9d8f";     // guarded: green ring
+    if(on&&n.guarded&&!n.unguarded){ctx.lineWidth=2;ctx.strokeStyle="#2a9d8f";     // guarded: green ring only
       ctx.beginPath();ctx.arc(x,y,rr+2.5,0,6.2832);ctx.stroke();}
-    else if(on&&n.isSource&&n.isSink){ctx.lineWidth=2;ctx.strokeStyle=LAYER_COLOR[n.dataColor]||"#4c9dff";
-      ctx.beginPath();ctx.arc(x,y,rr+3,0,6.2832);ctx.stroke();}
     ctx.globalAlpha=1;
   }
   // labels (LOD: hero/hover/selected always; others when zoomed in)
