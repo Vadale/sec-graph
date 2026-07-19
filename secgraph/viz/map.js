@@ -193,9 +193,10 @@ function draw(){
   // taint routes
   for(const f of ROUTES){ if(!findingVisible(f))continue; if(focusF&&f!==focusF)continue;
     const s=f._src,t=f._sink; if(!nodeShown(s)||!nodeShown(t))continue;
-    if(s===t && f.source_line===f.sink_line) continue;   // a located finding (no data-flow, e.g. a
-    drawRoute(s,t,f,focusF?1:dim(s));                     // pattern-match SAST) is a POINT -> the node is
-  }                                                       // the mark; a self-loop arc would be pure noise
+    if(s===t) continue;   // source & sink fall on the SAME graph node -- an intra-function flow (source
+    drawRoute(s,t,f,focusF?1:dim(s));   // and sink inside one def) or a located point. There is no
+  }                       // inter-node structure to draw: the node's own mark + unguarded glow carries
+                          // it, and the full statement-level trace lives in the detail card / sidebar.
   // nodes
   for(const n of N.values()){ if(!nodeShown(n))continue;
     const a=dim(n); if(a<=0.02)continue;
@@ -231,25 +232,21 @@ function draw(){
 }
 function rrect(x,y,w,h,r){ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
   ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
-function drawRoute(s,t,f,a){
+function drawRoute(s,t,f,a){                                   // only ever called for s!==t (inter-node)
   const x1=SX(s),y1=SY(s),x2=SX(t),y2=SY(t);
   const mx=(x1+x2)/2,my=(y1+y2)/2, nx=-(y2-y1),ny=(x2-x1),nl=Math.hypot(nx,ny)||1;
   const off=Math.min(60,Math.hypot(x2-x1,y2-y1)*0.18)+ (f._idx||0)*7;
   const cx=mx+nx/nl*off, cy=my+ny/nl*off;
   if(f.unguarded){ctx.save();ctx.shadowColor="rgba(229,72,77,0.7)";ctx.shadowBlur=12+4*Math.sin(pulse);}
-  // a self-loop has x1==x2,y1==y2 -> a zero-length linear gradient paints nothing; span the arc instead
-  const grad=(s===t)?ctx.createLinearGradient(x1,y1-34,x1,y1):ctx.createLinearGradient(x1,y1,x2,y2);
+  const grad=ctx.createLinearGradient(x1,y1,x2,y2);
   grad.addColorStop(0,f._color);grad.addColorStop(1,SINK);
   ctx.globalAlpha=Math.max(0.5,a);ctx.strokeStyle=grad;ctx.lineWidth=(SEV_W[f.severity]||2)+(f===focusF?1.5:0);
-  ctx.beginPath();
-  if(s===t){ctx.arc(x1, y1-18, 16, 0.6, 5.7);}                 // self-loop (intra)
-  else{ctx.moveTo(x1,y1);ctx.quadraticCurveTo(cx,cy,x2,y2);}
-  ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo(cx,cy,x2,y2);ctx.stroke();
   if(f.unguarded)ctx.restore();
   // arrowhead at sink
-  if(s!==t){const ang=Math.atan2(y2-cy,x2-cx);ctx.fillStyle=SINK;ctx.globalAlpha=Math.max(0.5,a);
-    ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-9*Math.cos(ang-0.4),y2-9*Math.sin(ang-0.4));
-    ctx.lineTo(x2-9*Math.cos(ang+0.4),y2-9*Math.sin(ang+0.4));ctx.closePath();ctx.fill();}
+  const ang=Math.atan2(y2-cy,x2-cx);ctx.fillStyle=SINK;ctx.globalAlpha=Math.max(0.5,a);
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-9*Math.cos(ang-0.4),y2-9*Math.sin(ang-0.4));
+  ctx.lineTo(x2-9*Math.cos(ang+0.4),y2-9*Math.sin(ang+0.4));ctx.closePath();ctx.fill();
   ctx.globalAlpha=1;
 }
 const NEIGHBORS=new Map();
