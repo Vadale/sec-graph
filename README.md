@@ -35,9 +35,10 @@ slices**, scored against hand‑labelled, independently‑audited ground truth. 
   That's what makes per‑finding triage cheap enough to run on a local model.
 - **Accuracy: a small, statistically‑inconclusive, repo‑dependent edge** (real/FP +6 pts pooled, not
   significant) — reported as a signal, not a result.
-- **We caught our own bug.** The self‑audit showed sec-graph's `unguarded` verdict misses Django's inline
-  `if request.user.is_authenticated:` gate (56% precision — though it *never* falsely claims `guarded`).
-  Fix tracked.
+- **The self‑audit is honest about a limitation.** sec-graph's `unguarded` verdict over‑reports (56%
+  precision) when an app uses a *custom* auth decorator/callable not in the default barrier list, or a
+  guard in a *calling* function — though it *never* falsely claims `guarded` (100%). That's
+  configuration + a future interprocedural improvement, published, not buried.
 
 Full methodology, numbers, and a "when it helps / when it doesn't" table: **[benchmark/BENCHMARK.md](benchmark/BENCHMARK.md)** ·
 pre‑registration: **[benchmark/PROTOCOL.md](benchmark/PROTOCOL.md)**.

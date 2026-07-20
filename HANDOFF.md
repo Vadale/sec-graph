@@ -8,16 +8,21 @@ The OSS-release track (ADR-015) is done. Tree clean, 121 tests, wheel builds (be
 - **Phase 12 (benchmark):** `benchmark/` — pre-registered (PROTOCOL.md), 66-finding corpus (PyGoat dev +
   Vulpy + Vulnerable-Flask-App), blind + Fable-audited truth, A/B/C sweep (gemma4:e4b, 100% det.),
   report.py → **BENCHMARK.md**. Honest result: **efficiency win (~1/7 tokens, same real/FP), accuracy
-  inconclusive, prioritization no-win**; the self-audit surfaced a **real guard bug**.
+  inconclusive, prioritization no-win**; the self-audit surfaced a **false-`unguarded` limitation**.
 - **Phase 13 (docs):** README rewritten (post-pivot, honest benchmark headline), CONTRIBUTING, SECURITY,
   docs/img screenshot.
-- **HN post draft:** `scratchpad/HN_POST_DRAFT.md` (maintainer's, not in repo).
+- **PUBLISHED 2026-07-20:** https://github.com/Vadale/sec-graph (public; tailnet IP scrubbed from history
+  via git-filter-repo). **HN post draft:** `scratchpad/HN_POST_DRAFT.md`.
 
-### TOP FOLLOW-UP (a real bug the benchmark caught, tracked for a v-next run)
-`taint/guards.py` `guard_map` misses Django's inline `if request.user.is_authenticated:` gate → it
-**over-reports `unguarded`** (self-audit: 56% unguarded-precision; never a false `guarded`, 100%). Fixing
-it (recognize `request.user.is_authenticated` as a B2 barrier / test-attr) should lift Arm-B guard_acc and
-O3 prioritization; re-run the sweep as a labelled **v-next** and amend BENCHMARK.md (freeze discipline).
+### CORRECTION (2026-07-20): the "guard bug" was mis-diagnosed
+An earlier draft (and the first published BENCHMARK/README) said `guard_map` misses inline
+`if request.user.is_authenticated:` — **that is WRONG**; sec-graph handles that gate correctly (verified:
+views.py:162/214/460/927 are `guarded`). The real cause of the 56% unguarded-precision (12 false-
+`unguarded`s, inspected): **(a) custom barrier names** not in `rules/labels.yml` (PyGoat
+`@authentication_decorator` ×7, VFA `verify_jwt` + Vulpy `libuser.login` ×3) and **(b) interprocedural
+guards** (gate in a caller; the enrich guard is intraprocedural, ×2). Honest limitation, not a one-liner;
+adding the corpus's names to the default would overfit. Docs corrected + re-pushed. Real improvement =
+interprocedural guard propagation in `ingest/enrich._guard_verdict` (future work).
 
 ## Where we are
 Bootstrap + phases 0–8 (MVP) + Tier-3 typing + **Phases 9 + 10 (SARIF ingestion + layer enrichment

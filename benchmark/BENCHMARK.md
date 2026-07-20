@@ -110,17 +110,23 @@ global.** With N = 66 and 11 FPs, we report this as a signal, not a result.
 auth-guard accuracy, because B inherits sec-graph's guard errors. The **tool self-audit** localizes it:
 sec-graph's "unguarded" verdict is right only **15/27 (56%)** of the time, while "guarded" is **14/14
 (100%)** — i.e. it **never falsely claims guarded** (ADR-010's asymmetry holds) but **over-reports
-unguarded**. Root cause, found via the benchmark: `guard_map` misses Django's inline
-`if request.user.is_authenticated:` gate (it recognizes decorators and some barriers, not that
-attribute) — the *same* blind spot the human labeller had, which the Fable label-audit corrected in the
-ground truth but which remains in the frozen tool. Per PROTOCOL this is a **result, reported not
-silenced**; the fix (add the barrier, re-run as a labelled v-next) is future work. It also pollutes O3's
-unguarded-first tiering (below).
+unguarded**. Root cause, traced by inspecting all 12 false-`unguarded`s (an earlier draft of this file
+mis-attributed it to inline `if request.user.is_authenticated:` — that is *wrong*; sec-graph handles
+that gate correctly, verified). The 12 break down as: **(a) custom barrier names the default rule pack
+doesn't list** — PyGoat's `@authentication_decorator` (7), Vulnerable-Flask-App's `verify_jwt()` and
+Vulpy's `libuser.login()` (3); the barrier list in `rules/labels.yml` is user-configurable *precisely*
+because the tool cannot know every app's auth-function names by default; and **(b) interprocedural
+guards** — the sink's enclosing function is unguarded but a *caller* gates it (2: the cross-file
+path-injection, the `password_change` helper), which the ingest-time guard analysis (intraprocedural)
+does not see. So this is an honest **limitation**, not a one-line bug: it's *configuration* (add your
+app's barrier names) + a real future improvement (interprocedural guard propagation in the enrich path).
+Adding those specific names to the default would **overfit this corpus**, so we don't. It also degrades
+O3's unguarded-first tiering (below).
 
 **4. Prioritization (O3 vs O2): no win on this corpus.** Against a severity-sorted SARIF baseline (O2),
 sec-graph's ordering (O3) did **not** do better — both hit the first true-critical at rank 1 on 2/3
 repos, and O2's precision@10 was competitive or better (PyGoat 10/10 vs 7/10). The unguarded-first
-signal that is supposed to differentiate O3 is degraded by the same false-unguarded bug in (3). Honest
+signal that is supposed to differentiate O3 is degraded by the same false-unguarded limitation in (3). Honest
 verdict: on this small, mostly-critical corpus, a `jq` severity sort is a strong baseline we did not beat.
 
 **5. Class accuracy is confounded — we do not claim it.** Arm B "won" class (98% vs 49%), but B is
@@ -133,7 +139,8 @@ B *by construction* (flagged in PROTOCOL §4). The fair test is the blind-class 
 findings on three deliberately-vulnerable Python apps, sec-graph's minimal MCP slices matched whole-file
 triage on real/FP accuracy (Δ +6 pts, not significant) while cutting prompt tokens ~7× and wall-time
 ~2×; its current guard verdict and prioritization did not improve over the raw baseline, and the
-self-audit surfaced a fixable false-unguarded bug.* Scoped to this model, these repos, and Python.
+self-audit surfaced a false-`unguarded` limitation (custom barrier names + interprocedural guards),
+though never a false-`guarded`.* Scoped to this model, these repos, and Python.
 
 ---
 
@@ -163,10 +170,13 @@ self-audit surfaced a fixable false-unguarded bug.* Scoped to this model, these 
   them.
 - **FastAPI `Depends()` auth** reads `unknown`/`unguarded` (a documented under-claim, ADR-015) → it
   over-prioritizes FastAPI routes.
-- **The guard verdict, as of this run** — `guard_map` misses Django's inline
-  `if request.user.is_authenticated:` gate, so it over-reports `unguarded` (56% precision here; it
-  never falsely claims `guarded`, 100%). This hurt Arm B's guard accuracy and neutralized the
-  unguarded-first ordering. It is a bug, not a design limit — fix tracked for a labelled v-next run.
+- **The ingest-time guard verdict over-reports `unguarded`** (56% precision here; never a false
+  `guarded`, 100%) when the app uses a **custom auth decorator/callable** not in the default
+  `rules/labels.yml` barrier list (add your app's names — that is what the list is for) or when the
+  **guard is in a calling function** (the enrich-time analysis is intraprocedural). It handles inline
+  `if request.user.is_authenticated:` correctly. This hurt Arm B's guard accuracy and the O3 ordering.
+  Improvement = interprocedural guard propagation in the enrich path (future work); we do **not** add
+  the corpus's specific barrier names to the default (that would overfit this benchmark).
 
 ## Reproduce
 
