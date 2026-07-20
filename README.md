@@ -11,10 +11,11 @@ for triage. Everything runs locally and deterministically; no finding data leave
 Built on [graphify](https://github.com/safishamsi/graphify) (MIT). A small built‑in Python taint engine
 is kept as the **fallback** for when you don't have a SARIF report — it is not the product.
 
-![sec-graph map of PyGoat, CodeQL findings](docs/img/pygoat-codeql-map.png)
+![sec-graph: SQLi paths with the auth/unguarded layer](docs/img/auth-unguarded-map.png)
 
-*PyGoat's CodeQL findings in sec-graph: nodes coloured by data layer, red glow = an `unguarded` sink,
-the sidebar carries the CWE + hash‑verified trace each LLM triage call receives.*
+*The layer no SAST ships: **red glow = a dangerous sink reachable with no auth barrier** (triage these
+first) · **green ring = the same sink behind a real auth check**. Colour = data layer; the right‑hand
+sidebar carries each finding's CWE + the hash‑verified source→sink slice an LLM triage call receives.*
 
 ## Why
 
@@ -40,6 +41,12 @@ slices**, scored against hand‑labelled, independently‑audited ground truth. 
 
 Full methodology, numbers, and a "when it helps / when it doesn't" table: **[benchmark/BENCHMARK.md](benchmark/BENCHMARK.md)** ·
 pre‑registration: **[benchmark/PROTOCOL.md](benchmark/PROTOCOL.md)**.
+
+![sec-graph on PyGoat, real CodeQL findings](docs/img/pygoat-codeql-map.png)
+
+*On a real repo (PyGoat + CodeQL's 40 findings): most web‑app findings are intra‑function, so the map is
+a constellation of `unguarded` hotspots rather than long routes — the enriched sidebar is the workhorse
+there, and the graph earns its keep on cross‑function/cross‑file data‑flow. Honest by design.*
 
 ## Install
 
@@ -82,6 +89,11 @@ No SARIF? `secgraph analyze ./my-app` runs the built‑in Python fallback engine
    `find_unguarded_sinks`, `explain_layer`, `get_function_taint`) that hand your LLM the **minimal,
    hash‑verified** code windows for a path — never the whole repo. Run it alongside `graphify --mcp`
    (entity‑level questions stay with graphify; data‑flow paths are ours).
+
+![credentials + secret enrichment](docs/img/credentials-map.png)
+
+*Enrichment in action (`credentials` + `untrusted-input` layers): a hard‑coded `secret:aws-access-key-id`
+and `credentials`‑tagged data‑flows in amber — surfaced from the same findings, with tags no engine emits.*
 
 The analysis core is deterministic — **no LLM on the critical path**; `analyze` twice is byte‑identical.
 
