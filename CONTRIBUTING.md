@@ -31,7 +31,7 @@ projection, or viz) and `docs/architecture.md`.
   analysis is polarity‑sound and load‑bearing; keep it that way.
 - **Acceptance criteria are executable**, not adjectives — a change lands with a command + expected output
   (and a test where it makes sense).
-- **Design decisions go in `DECISIONS.md`** as an append‑only ADR (supersede, never relitigate).
+- **Design decisions get recorded as append‑only ADRs** (supersede, never relitigate) — ask a maintainer where the current log lives.
 
 ## Tests
 

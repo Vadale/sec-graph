@@ -1,6 +1,6 @@
 # Architecture
 
-Full detail lives in `ROADMAP.md` (§4 architecture, §8 data model, §9 integration
+Full detail on the data model and integration points follows below (§4 architecture, §8 data model, §9 integration
 contract). This is the orientation.
 
 ## The idea in one line

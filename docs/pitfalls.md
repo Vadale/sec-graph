@@ -1,7 +1,7 @@
 # Pitfalls — verified graphify 0.9.6 constraints
 
 Load-bearing facts verified by reading graphify 0.9.6's source. The design depends on
-them. Full context: `ROADMAP.md` §6. **Read this before touching the adapter,
+them. **Read this before touching the adapter,
 projection, or viz.**
 
 1. **`source_location` is start-line only** (`"L{line}"`) — no end line, no column.

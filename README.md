@@ -104,7 +104,7 @@ sec-graph is **bounded by your upstream SAST's recall** — it adds no findings 
 enrichment is *lexical* (identifier/secret patterns on a proven flow), stronger than grep but weaker than
 value‑tracking taint. The auth verdict and the built‑in engine are **Python‑only**; other languages get
 the map + slices but a `guard_status: unknown`. See BENCHMARK.md for the measured weaknesses (including a
-current guard‑analysis bug) and `DECISIONS.md` for the licence/scope notes on each engine.
+current guard‑analysis bug); the licence/scope notes for each engine are in `docs/`.
 
 ## Development
 
@@ -114,7 +114,7 @@ pytest                 # 121 tests
 pytest tests/contract  # the graphify contract test
 ```
 
-Architecture: `docs/architecture.md` · design log: `DECISIONS.md` · contributing: `CONTRIBUTING.md`.
+Architecture: `docs/architecture.md` · contributing: `CONTRIBUTING.md`.
 
 ## License & credits
 
